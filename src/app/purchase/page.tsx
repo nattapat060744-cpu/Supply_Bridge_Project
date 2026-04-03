@@ -280,7 +280,7 @@ useEffect(() => {
         body: JSON.stringify({ 
           groupName: batchName, // เปลี่ยนจาก batchName เป็น groupName ให้ตรงกับ API
           items: items,
-          groupId: `PUR-${Date.now()}` // ส่ง ID กลุ่มไปให้ API ด้วย
+          groupId: `จัดซื้อสั่งของ-${Date.now()}` // ส่ง ID กลุ่มไปให้ API ด้วย
         }),
       });
       if (res.ok) {

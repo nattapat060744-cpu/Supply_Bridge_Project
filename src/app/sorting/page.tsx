@@ -317,6 +317,20 @@ const groupedByDate = useMemo(() => {
   return groups;
 }, [currentBatchIds, activeBatches]); // เพิ่ม currentBatchIds เข้าไปใน Dependency ด้วย
 
+// ฟังก์ชันแปลงวันที่แบบบังคับให้อ่านถูกทุกเครื่อง
+const parseThaiDate = (rawDate: string | number | Date) => {
+  if (typeof rawDate === 'string' && rawDate.includes('/')) {
+    const parts = rawDate.split(',')[0].split('/'); // แยก 3/4/2569 ออกมา
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    let year = parseInt(parts[2]);
+    
+    if (year > 2500) year -= 543; // ถ้าเป็น พ.ศ. ให้ลบออกเป็น ค.ศ. เสมอ
+    return new Date(year, month, day);
+  }
+  return new Date(rawDate);
+};
+
 
   // แก้ไข: เพิ่มการเช็คสิทธิ์ SORTING ก่อนดึงข้อมูล
   useEffect(() => {
