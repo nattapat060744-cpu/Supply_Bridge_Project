@@ -274,32 +274,35 @@ const fetchStatus = async () => {
     }
   };
 
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentBatchIds = allFilteredBatchIds.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(allFilteredBatchIds.length / itemsPerPage);
+
   // ฟังก์ชันช่วยจัดกลุ่มข้อมูลตามวันที่ (YYYY-MM-DD)
 const groupedByDate = useMemo(() => {
   const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
   
-  Object.entries(activeBatches).forEach(([batchId, items]) => {
+  // แก้ไข: เปลี่ยนจาก Object.entries(activeBatches) เป็นการ loop ตาม currentBatchIds (ที่มีแค่ 6 รายการ)
+  currentBatchIds.forEach((batchId) => {
+    const items = activeBatches[batchId];
+    if (!items || items.length === 0) return;
+
     const rawDate = items[0]?.createdAt || items[0]?.Recv_Date || "";
     let d: Date;
 
-    // --- ส่วนที่แก้ไข: ป้องกันการสลับ วัน/เดือน ---
     if (typeof rawDate === 'string' && rawDate.includes('/')) {
-      // ถ้ามาเป็นแบบ 02/04/2569 ให้แยกส่วนด้วย /
-      const parts = rawDate.split(' ')[0].split('/'); // แยกเอาแค่ส่วนวันที่ ไม่เอาเวลา
+      const parts = rawDate.split(' ')[0].split('/');
       const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1; // เดือนใน JS เริ่มที่ 0-11
+      const month = parseInt(parts[1]) - 1;
       let year = parseInt(parts[2]);
-
-      if (year > 2500) year -= 543; // ปรับ พ.ศ. เป็น ค.ศ.
-
-      // สร้างวันที่ใหม่แบบระบุตำแหน่งชัดเจน (Year, Month, Day)
+      if (year > 2500) year -= 543;
       d = new Date(year, month, day);
     } else {
       d = new Date(rawDate);
     }
-    // ---------------------------------------
 
-    if (isNaN(d.getTime())) d = new Date(); // กันเหนียวถ้า Error ให้ใช้วันนี้
+    if (isNaN(d.getTime())) d = new Date();
 
     const dateKey = d.toLocaleDateString('th-TH', {
       year: 'numeric',
@@ -308,12 +311,11 @@ const groupedByDate = useMemo(() => {
     });
 
     if (!groups[dateKey]) groups[dateKey] = [];
-    // @ts-ignore
     groups[dateKey].push({ batchId, items });
   });
 
   return groups;
-}, [activeBatches]);
+}, [currentBatchIds, activeBatches]); // เพิ่ม currentBatchIds เข้าไปใน Dependency ด้วย
 
 
   // แก้ไข: เพิ่มการเช็คสิทธิ์ SORTING ก่อนดึงข้อมูล
@@ -367,11 +369,6 @@ const groupedByDate = useMemo(() => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentBatchIds = allFilteredBatchIds.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(allFilteredBatchIds.length / itemsPerPage);
 
   const addItemToTempList = (e: React.FormEvent) => {
     e.preventDefault();
