@@ -240,7 +240,7 @@ const fetchStatus = async () => {
         status: item.Status || item.status,
         batchId: item.Group_ID || item.batchId || 'no-batch',
         batchName: item.Group_Name || item.batchName || item.Group_ID || 'ไม่มีชื่อกลุ่ม',
-        createdAt: item.Created_At || item.createdAt,
+        createdAt: item.Created_At || item.createdAt || new Date().toISOString(),
         orderCarton: (item.Order_Carton || item.orderCarton || '0').toString(),
         cartonUnit: item.Carton_Unit || item.cartonUnit || 'ลัง',
         innerUnit: item.Inner_Unit || item.innerUnit || 'ชิ้น',
@@ -273,6 +273,48 @@ const fetchStatus = async () => {
       console.error("❌ Fetch status error:", err);
     }
   };
+
+  // ฟังก์ชันช่วยจัดกลุ่มข้อมูลตามวันที่ (YYYY-MM-DD)
+const groupedByDate = useMemo(() => {
+  const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
+  
+  Object.entries(activeBatches).forEach(([batchId, items]) => {
+    const rawDate = items[0]?.createdAt || items[0]?.Recv_Date || "";
+    let d: Date;
+
+    // --- ส่วนที่แก้ไข: ป้องกันการสลับ วัน/เดือน ---
+    if (typeof rawDate === 'string' && rawDate.includes('/')) {
+      // ถ้ามาเป็นแบบ 02/04/2569 ให้แยกส่วนด้วย /
+      const parts = rawDate.split(' ')[0].split('/'); // แยกเอาแค่ส่วนวันที่ ไม่เอาเวลา
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // เดือนใน JS เริ่มที่ 0-11
+      let year = parseInt(parts[2]);
+
+      if (year > 2500) year -= 543; // ปรับ พ.ศ. เป็น ค.ศ.
+
+      // สร้างวันที่ใหม่แบบระบุตำแหน่งชัดเจน (Year, Month, Day)
+      d = new Date(year, month, day);
+    } else {
+      d = new Date(rawDate);
+    }
+    // ---------------------------------------
+
+    if (isNaN(d.getTime())) d = new Date(); // กันเหนียวถ้า Error ให้ใช้วันนี้
+
+    const dateKey = d.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    if (!groups[dateKey]) groups[dateKey] = [];
+    // @ts-ignore
+    groups[dateKey].push({ batchId, items });
+  });
+
+  return groups;
+}, [activeBatches]);
+
 
   // แก้ไข: เพิ่มการเช็คสิทธิ์ SORTING ก่อนดึงข้อมูล
   useEffect(() => {
@@ -527,14 +569,15 @@ const fetchStatus = async () => {
             </div>
           </div>
         </div>
+        
 
-        {/* Batch Monitoring Section */}
+{/* Batch Monitoring Section */}
         <section className="space-y-6">
           <div className="flex items-center gap-4 mb-6 px-2">
             <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter italic">รายการบิลที่กำลังดำเนินการ</h2>
             <div className="h-px flex-1 bg-slate-100"></div>
           </div>
-
+          
           {loading && Object.keys(activeBatches).length === 0 ? (
             <div className="text-center py-20 font-black text-slate-300 uppercase tracking-widest text-xs">กำลังโหลดข้อมูลสถานะสด...</div>
           ) : currentBatchIds.length === 0 ? (
@@ -542,215 +585,220 @@ const fetchStatus = async () => {
               ไม่พบข้อมูลที่ตรงกับการค้นหาครับ
             </div>
           ) : (
-            currentBatchIds.map((batchId) => {
-              const batchItems = activeBatches[batchId];
-              const isExpanded = expandedBatches[batchId];
-              const hasOrdered = batchItems.some(i => i.status === 'ORDERED' || i.orderCarton);
-              const allDone = batchItems.every(i => i.status === 'COMPLETED');
-              const isProcessing = hasOrdered && !allDone;
-              const hasUpdateInBatch = batchItems.some(item => updatedItems.has(`${batchId}-${item.id}`));
-
-              return (
-                <div key={batchId} id={`batch-${batchId}`} className={`rounded-[40px] overflow-hidden transition-all border border-slate-100 ${isExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-white/60 hover:bg-white'}`}>
-                  <button 
-                    onClick={() => {
-                      const nextExpanded = !isExpanded;
-                      setExpandedBatches({ ...expandedBatches, [batchId]: nextExpanded });
-                      if (nextExpanded) clearBatchNotifications(batchId);
-                    }}
-                    className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
-                  >
-                    <div className="flex items-center gap-6">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative ${isExpanded ? 'bg-blue-600' : 'bg-slate-100'}`}>
-                        {allDone ? '✅' : hasOrdered ? '🛒' : '📦'}
-                        {hasUpdateInBatch && !isExpanded && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-4 border-white rounded-full animate-ping"></span>
-                        )}
-                      </div>
-                      <div className="text-left">
-                        <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>ชื่อรอบการสั่งซื้อ</span>
-                        <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">{batchItems[0]?.batchName || batchId}</h2>
-                      </div>
+            <div className="space-y-10">
+              {Object.entries(groupedByDate).map(([dateLabel, batchesInDate]) => (
+                <div key={dateLabel} className="space-y-6">
+                  
+                  {/* --- ส่วนหัวข้อวันที่ (Date Header) --- */}
+                  <div className="flex items-center gap-4 py-4">
+                    <div className="h-px flex-1 bg-slate-200"></div>
+                    <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
+                      <span className="text-lg">📅</span>
+                      <span className="text-sm font-black text-slate-600 uppercase tracking-tight">
+                        รายการของวันที่: {dateLabel}
+                      </span>
                     </div>
-                    <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>↓</div>
-                  </button>
+                    <div className="h-px flex-1 bg-slate-200"></div>
+                  </div>
 
-                  {isExpanded && (
-                    <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
-                      
-                      {/* Timeline Status */}
-                      <div className="max-w-3xl mx-auto bg-white p-8 rounded-[35px] shadow-sm border border-slate-100">
-                        <div className="relative flex justify-between items-center px-6">
-                          <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
-                          
-                          {/* ขั้นที่ 1: สร้างคำขอ (สำเร็จเสมอเมื่อบิลโผล่มา) */}
-                          <div className="relative z-10 flex flex-col items-center gap-3">
-                            <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
-                            <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
-                          </div>
+                  {/* รายการบิลของวันนั้นๆ */}
+                  {/* batchesInDate อาจจะเป็น Array ของ string หรือ object ขึ้นอยู่กับโครงสร้าง groupedByDate ของพี่ชาย */}
+                  {/* ในที่นี้ผมแก้ให้รองรับทั้งแบบ string และแบบที่มี .batchId ครับ */}
+                  {batchesInDate.map((item: any) => {
+                    const batchId = typeof item === 'string' ? item : item.batchId;
+                    const batchItems = activeBatches[batchId];
+                    if (!batchItems) return null;
 
-                          {/* ขั้นที่ 2: สั่งซื้อแล้ว (ต้องมีการใส่จำนวนสั่งซื้อ และสถานะไม่ใช่ PENDING) */}
-                          <div className="relative z-10 flex flex-col items-center gap-3">
-                            <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                              batchItems.some(i => i.status !== 'PENDING' && (Number(i.orderCarton) > 0)) 
-                              ? 'bg-emerald-600 text-white shadow-lg' 
-                              : 'bg-white border-2 border-slate-100 text-slate-200'
-                            }`}>🛒</div>
-                            <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                              batchItems.some(i => i.status !== 'PENDING') ? 'text-emerald-600' : 'text-slate-300'
-                            }`}>สั่งซื้อแล้ว</span>
-                          </div>
+                    const isExpanded = expandedBatches[batchId];
+                    const hasOrdered = batchItems.some((i: OrderItem) => i.status === 'ORDERED' || i.orderCarton);
+                    const allDone = batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
+                    const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));
 
-                         {/* ขั้นที่ 3: กำลังส่ง (ปรับให้ไฟติดทันทีเมื่อ 'สั่งซื้อแล้ว' หรือ 'รับของบางส่วน') */}
-                        <div className="relative z-10 flex flex-col items-center gap-3">
-                          <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                            batchItems.some(i => 
-                              i.status === 'ORDERED' || 
-                              i.status === 'RECEIVED' || 
-                              (i.Recv_Carton !== '' && i.Recv_Carton !== null && Number(i.Recv_Carton) > 0)
-                            ) 
-                            ? 'bg-amber-500 text-white animate-pulse shadow-lg' // ไฟส้มกระพริบเมื่อสั่งแล้ว/กำลังส่ง
-                            : 'bg-white border-2 border-slate-100 text-slate-200'
-                          }`}>🚚</div>
-                          <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                            batchItems.some(i => i.status === 'ORDERED' || i.status === 'RECEIVED') 
-                            ? 'text-amber-600' 
-                            : 'text-slate-300'
-                          }`}>กำลังส่ง</span>
-                        </div>
-
-                          {/* ขั้นที่ 4: เรียบร้อย (ทุกรายการต้องเป็น COMPLETED) */}
-                          <div className="relative z-10 flex flex-col items-center gap-3">
-                            <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                              batchItems.every(i => i.status === 'COMPLETED') 
-                              ? 'bg-slate-900 text-white shadow-lg' 
-                              : 'bg-white border-2 border-slate-100 text-slate-200'
-                            }`}>🏁</div>
-                            <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                              batchItems.every(i => i.status === 'COMPLETED') ? 'text-slate-900' : 'text-slate-300'
-                            }`}>เรียบร้อย</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Items Table */}
-                      <div className="bg-white rounded-[35px] border border-slate-100 overflow-hidden shadow-sm">
-                        <div className="hidden md:block px-10 py-5 bg-slate-900">
+                    return (
+                      <div key={batchId} id={`batch-${batchId}`} className={`rounded-[40px] overflow-hidden transition-all border border-slate-100 ${isExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-white/60 hover:bg-white'}`}>
+                        <button 
+                          onClick={() => {
+                            const nextExpanded = !isExpanded;
+                            setExpandedBatches((prev: Record<string, boolean>) => ({ ...prev, [batchId]: nextExpanded }));
+                            if (nextExpanded) clearBatchNotifications(batchId);
+                          }}
+                          className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
+                        >
                           <div className="flex items-center gap-6">
-                            <div className="flex-1 text-white text-[10px] font-black uppercase tracking-[0.2em] italic">ชื่อสินค้า / รายละเอียด</div>
-                            <div className="flex items-center gap-4 min-w-137.5">
-                              <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลจัดซื้อ</div>
-                              <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลรับของ</div>
-                              <div className="flex-1 text-white text-[10px] font-black uppercase tracking-widest pl-4">หมายเหตุ</div>
-                              <div className="w-32 text-white text-[10px] font-black uppercase tracking-widest text-center">สถานะ</div>
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative ${isExpanded ? 'bg-blue-600' : 'bg-slate-100'}`}>
+                              {allDone ? '✅' : hasOrdered ? '🛒' : '📦'}
+                              {hasUpdateInBatch && !isExpanded && (
+                                <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-4 border-white rounded-full animate-ping"></span>
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>ชื่อรอบการสั่งซื้อ</span>
+                              <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">{batchItems[0]?.batchName || batchId}</h2>
                             </div>
                           </div>
-                        </div>
+                          <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>↓</div>
+                        </button>
 
-                        <div className="divide-y divide-slate-50">
-                          {batchItems.map((order, idx) => {
-                            const itemKey = `${batchId}-${order.id}`;
-                            const isItemUpdated = updatedItems.has(itemKey);
-
-                            return (
-                              <div key={idx} className={`p-6 md:px-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-700 ${isItemUpdated ? 'bg-blue-50 border-l-8 border-blue-500' : 'hover:bg-slate-50/50 border-l-8 border-transparent'}`}>
+                        {isExpanded && (
+                          <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
+                            
+                            {/* Timeline Status */}
+                            <div className="max-w-3xl mx-auto bg-white p-8 rounded-[35px] shadow-sm border border-slate-100">
+                              <div className="relative flex justify-between items-center px-6">
+                                <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
                                 
-                                <div className="flex-1 w-full md:w-auto">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-[9px] bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500 uppercase tracking-tighter">ID: {order.id}</span>
-                                    {isItemUpdated && (
-                                      <span className="flex h-2 w-2 relative">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  <h4 className="font-black text-slate-900 uppercase italic tracking-tight text-lg leading-tight">{order.name}</h4>
-                                  {order.note && <p className="text-[10px] text-blue-600 font-black mt-2 italic flex items-center gap-1"><span>📝</span> {order.note}</p>}
+                                <div className="relative z-10 flex flex-col items-center gap-3">
+                                  <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
+                                  <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
                                 </div>
 
-                                <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto bg-slate-50 md:bg-transparent p-5 md:p-0 rounded-3xl min-w-137.5">
-                                  
-                                  <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
-                                    <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลจัดซื้อ</span>
-                                    {order.orderCarton || order.qtyPerCarton ? (
-                                      <div className="flex flex-col items-center">
-                                        <div className="text-base font-black text-emerald-700 leading-none">{order.orderCarton || '0'} <span className="text-[9px] text-emerald-400 uppercase">{order.cartonUnit || 'ลัง'}</span></div>
-                                        <div className="mt-1.5 pt-1.5 border-t border-emerald-100 w-full text-[11px] font-black text-slate-500 leading-none">
-                                          {order.qtyPerCarton || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.innerUnit || 'ชิ้น'}</span>
-                                        </div>
-                                      </div>
-                                    ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอจัดซื้อ</span>}
-                                  </div>
+                                <div className="relative z-10 flex flex-col items-center gap-3">
+                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                    batchItems.some((i: OrderItem) => i.status !== 'PENDING' && (Number(i.orderCarton) > 0)) 
+                                    ? 'bg-emerald-600 text-white shadow-lg' 
+                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                  }`}>🛒</div>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
+                                    batchItems.some((i: OrderItem) => i.status !== 'PENDING') ? 'text-emerald-600' : 'text-slate-300'
+                                  }`}>สั่งซื้อแล้ว</span>
+                                </div>
 
-                                  <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
-                                    <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลรับของ</span>
-                                    {(order.Recv_Carton !== undefined && order.Recv_Carton !== null && order.Recv_Carton !== '') ? (
-                                      <div className="flex flex-col items-center">
-                                        <div className="text-base font-black text-yellow-600 leading-none">{order.Recv_Carton} <span className="text-[9px] text-yellow-400 uppercase">{order.Recv_Unit || 'ลัง'}</span></div>
-                                        <div className="mt-1.5 pt-1.5 border-t border-yellow-100 w-full text-[11px] font-black text-slate-500 leading-none">
-                                          {order.Recv_Qty || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.Recv_Qty_Unit || 'ชิ้น'}</span>
-                                        </div>
-                                      </div>
-                                    ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอเข้าคลัง</span>}
-                                  </div>
+                                <div className="relative z-10 flex flex-col items-center gap-3">
+                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                    batchItems.some((i: OrderItem) => 
+                                      i.status === 'ORDERED' || 
+                                      i.status === 'RECEIVED' || 
+                                      (i.Recv_Carton !== '' && i.Recv_Carton !== null && Number(i.Recv_Carton) > 0)
+                                    ) 
+                                    ? 'bg-amber-500 text-white animate-pulse shadow-lg' 
+                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                  }`}>🚚</div>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
+                                    batchItems.some((i: OrderItem) => i.status === 'ORDERED' || i.status === 'RECEIVED') 
+                                    ? 'text-amber-600' 
+                                    : 'text-slate-300'
+                                  }`}>กำลังส่ง</span>
+                                </div>
 
-                                  <div className="flex-1 w-full md:w-auto text-center md:text-left px-2">
-                                    <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">หมายเหตุ</span>
-                                    <div className="text-[10px] font-bold italic leading-tight space-y-1.5">
-                                      {/* หมายเหตุจากคลังสินค้า (Note_Stock) */}
-                                      {order.Note_Stock && (
-                                        <div 
-                                          onClick={() => toggleNote(`${batchId}-${order.id}-stock`)}
-                                          className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all"
-                                        >
-                                          <p className={`text-yellow-600 font-black ${expandedNotes[`${batchId}-${order.id}-stock`] ? 'whitespace-normal' : 'truncate'}`}>
-                                            🏁 {order.Note_Stock}
-                                          </p>
-                                        </div>
-                                      )}
+                                <div className="relative z-10 flex flex-col items-center gap-3">
+                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                    batchItems.every((i: OrderItem) => i.status === 'COMPLETED') 
+                                    ? 'bg-slate-900 text-white shadow-lg' 
+                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                  }`}>🏁</div>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
+                                    batchItems.every((i: OrderItem) => i.status === 'COMPLETED') ? 'text-slate-900' : 'text-slate-300'
+                                  }`}>เรียบร้อย</span>
+                                </div>
+                              </div>
+                            </div>
 
-                                      {/* หมายเหตุจากจัดซื้อ (Note_Purchase) */}
-                                      {order.Note_Purchase && (
-                                        <div 
-                                          onClick={() => toggleNote(`${batchId}-${order.id}-pur`)}
-                                          className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all"
-                                        >
-                                          <p className={`text-emerald-600 font-black ${expandedNotes[`${batchId}-${order.id}-pur`] ? 'whitespace-normal' : 'truncate'}`}>
-                                            💬 {order.Note_Purchase}
-                                          </p>
-                                        </div>
-                                      )}
-
-                                      {!order.Note_Stock && !order.Note_Purchase && (
-                                        <span className="text-slate-200">-</span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className={`w-full md:w-32 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
-                                      order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
-                                      order.status === 'COMPLETED' ? 'bg-slate-900 text-white border-slate-900' : 
-                                      // รวม ORDERED และ RECEIVED ให้เป็นสีส้ม "กำลังนำส่ง"
-                                      (order.status === 'ORDERED' || order.status === 'RECEIVED') ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' : 
-                                      'bg-blue-50 text-blue-600 border-blue-100' // Default คือ PENDING (รอจัดซื้อ) ให้เป็นสีฟ้าจะได้แยกชัดเจน
-                                    }`}>
-                                      {order.status === 'REJECTED' ? '✖ ปฏิเสธ' : 
-                                      order.status === 'COMPLETED' ? '🏁 เรียบร้อย' : 
-                                      order.status === 'RECEIVED' ? '🚚 กำลังนำส่ง (บางส่วน)' :
-                                      order.status === 'ORDERED' ? '🚚 กำลังนำส่ง' : '⏳ รอจัดซื้อ'}
+                            {/* Items Table */}
+                            <div className="bg-white rounded-[35px] border border-slate-100 overflow-hidden shadow-sm">
+                              <div className="hidden md:block px-10 py-5 bg-slate-900">
+                                <div className="flex items-center gap-6">
+                                  <div className="flex-1 text-white text-[10px] font-black uppercase tracking-[0.2em] italic">ชื่อสินค้า / รายละเอียด</div>
+                                  <div className="flex items-center gap-4 min-w-137.5">
+                                    <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลจัดซื้อ</div>
+                                    <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลรับของ</div>
+                                    <div className="flex-1 text-white text-[10px] font-black uppercase tracking-widest pl-4">หมายเหตุ</div>
+                                    <div className="w-32 text-white text-[10px] font-black uppercase tracking-widest text-center">สถานะ</div>
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>  
-                    </div>
-                  )}
+
+                              <div className="divide-y divide-slate-50">
+                                {batchItems.map((order: OrderItem, idx: number) => {
+                                  const itemKey = `${batchId}-${order.id}`;
+                                  const isItemUpdated = updatedItems.has(itemKey);
+
+                                  return (
+                                    <div key={idx} className={`p-6 md:px-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-700 ${isItemUpdated ? 'bg-blue-50 border-l-8 border-blue-500' : 'hover:bg-slate-50/50 border-l-8 border-transparent'}`}>
+                                      <div className="flex-1 w-full md:w-auto">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="text-[9px] bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500 uppercase tracking-tighter">ID: {order.id}</span>
+                                          {isItemUpdated && (
+                                            <span className="flex h-2 w-2 relative">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <h4 className="font-black text-slate-900 uppercase italic tracking-tight text-lg leading-tight">{order.name}</h4>
+                                        {order.note && <p className="text-[10px] text-blue-600 font-black mt-2 italic flex items-center gap-1"><span>📝</span> {order.note}</p>}
+                                      </div>
+
+                                      <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto bg-slate-50 md:bg-transparent p-5 md:p-0 rounded-3xl min-w-137.5">
+                                        <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
+                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลจัดซื้อ</span>
+                                          {order.orderCarton || order.qtyPerCarton ? (
+                                            <div className="flex flex-col items-center">
+                                              <div className="text-base font-black text-emerald-700 leading-none">{order.orderCarton || '0'} <span className="text-[9px] text-emerald-400 uppercase">{order.cartonUnit || 'ลัง'}</span></div>
+                                              <div className="mt-1.5 pt-1.5 border-t border-emerald-100 w-full text-[11px] font-black text-slate-500 leading-none">
+                                                {order.qtyPerCarton || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.innerUnit || 'ชิ้น'}</span>
+                                              </div>
+                                            </div>
+                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอจัดซื้อ</span>}
+                                        </div>
+
+                                        <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
+                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลรับของ</span>
+                                          {(order.Recv_Carton !== undefined && order.Recv_Carton !== null && order.Recv_Carton !== '') ? (
+                                            <div className="flex flex-col items-center">
+                                              <div className="text-base font-black text-yellow-600 leading-none">{order.Recv_Carton} <span className="text-[9px] text-yellow-400 uppercase">{order.Recv_Unit || 'ลัง'}</span></div>
+                                              <div className="mt-1.5 pt-1.5 border-t border-yellow-100 w-full text-[11px] font-black text-slate-500 leading-none">
+                                                {order.Recv_Qty || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.Recv_Qty_Unit || 'ชิ้น'}</span>
+                                              </div>
+                                            </div>
+                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอเข้าคลัง</span>}
+                                        </div>
+
+                                        <div className="flex-1 w-full md:w-auto text-center md:text-left px-2">
+                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">หมายเหตุ</span>
+                                          <div className="text-[10px] font-bold italic leading-tight space-y-1.5">
+                                            {order.Note_Stock && (
+                                              <div onClick={() => toggleNote(`${batchId}-${order.id}-stock`)} className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all">
+                                                <p className={`text-yellow-600 font-black ${expandedNotes[`${batchId}-${order.id}-stock`] ? 'whitespace-normal' : 'truncate'}`}>
+                                                  🏁 {order.Note_Stock}
+                                                </p>
+                                              </div>
+                                            )}
+                                            {order.Note_Purchase && (
+                                              <div onClick={() => toggleNote(`${batchId}-${order.id}-pur`)} className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all">
+                                                <p className={`text-emerald-600 font-black ${expandedNotes[`${batchId}-${order.id}-pur`] ? 'whitespace-normal' : 'truncate'}`}>
+                                                  💬 {order.Note_Purchase}
+                                                </p>
+                                              </div>
+                                            )}
+                                            {!order.Note_Stock && !order.Note_Purchase && <span className="text-slate-200">-</span>}
+                                          </div>
+                                        </div>
+
+                                        <div className={`w-full md:w-32 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
+                                            order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
+                                            order.status === 'COMPLETED' ? 'bg-slate-900 text-white border-slate-900' : 
+                                            (order.status === 'ORDERED' || order.status === 'RECEIVED') ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' : 
+                                            'bg-blue-50 text-blue-600 border-blue-100'
+                                          }`}>
+                                          {order.status === 'REJECTED' ? '✖ ปฏิเสธ' : 
+                                          order.status === 'COMPLETED' ? '🏁 เรียบร้อย' : 
+                                          order.status === 'RECEIVED' ? '🚚 กำลังนำส่ง (บางส่วน)' :
+                                          order.status === 'ORDERED' ? '🚚 กำลังนำส่ง' : '⏳ รอจัดซื้อ'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>  
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })
+              ))}
+            </div>
           )}
         </section>
 
