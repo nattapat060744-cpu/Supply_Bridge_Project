@@ -36,6 +36,23 @@ interface Notification {
   batchName: string;
 }
 
+const parseThaiDate = (rawDate: string | number | Date) => {
+  if (!rawDate) return new Date();
+  
+  if (typeof rawDate === 'string') {
+    const datePart = rawDate.split(' ')[0];
+    if (datePart.includes('/')) {
+      const parts = datePart.split('/');
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year > 2500) year -= 543; 
+      return new Date(year, month, day);
+    }
+  }
+  return new Date(rawDate);
+};
+
 export default function SortingPage() {
   const router = useRouter();
 
@@ -50,6 +67,8 @@ export default function SortingPage() {
   const previousDataRef = useRef<{ [key: string]: string }>({});
   const isInitialLoadRef = useRef(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const dismissedBatchesRef = useRef<Set<string>>(new Set()); 
+  const lastAlertedSnapshotRef = useRef<{ [key: string]: string }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -137,15 +156,25 @@ const allFilteredBatchIds = useMemo(() => {
     }, [allFilteredBatchIds, activeBatches]);
 
   const clearBatchNotifications = (batchId: string) => {
-    setNotifications(prev => prev.filter(n => n.batchId !== batchId));
-    setUpdatedItems(prev => {
-      const next = new Set(prev);
-      Array.from(next).forEach(key => {
-        if (key.startsWith(`${batchId}-`)) next.delete(key);
+      setNotifications(prev => prev.filter(n => n.batchId !== batchId));
+      
+      // 1. ดึงรายการที่เคยปิดจากเครื่องมา แล้วเพิ่ม ID นี้เข้าไป
+      const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
+      dismissed[batchId] = true; 
+      localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
+
+      // 2. จดจำ Snapshot ปัจจุบันไว้ว่าตอนปิด ข้อมูลมันเป็นยังไง
+      const currentSnapshot = JSON.stringify(activeBatches[batchId] || []);
+      localStorage.setItem(`snapshot_${batchId}`, currentSnapshot);
+
+      setUpdatedItems(prev => {
+        const next = new Set(prev);
+        Array.from(next).forEach(key => {
+          if (key.startsWith(`${batchId}-`)) next.delete(key);
+        });
+        return next;
       });
-      return next;
-    });
-  };
+    };
 
   const handleAcknowledge = (batchId: string) => {
     const batchIndex = allFilteredBatchIds.indexOf(batchId);
@@ -164,53 +193,76 @@ const allFilteredBatchIds = useMemo(() => {
   };
 
   const trackChanges = (newData: OrderItem[]) => {
-    const batchUpdates: { [key: string]: { count: number; batchName: string } } = {};
-    let hasSnapshotChange = false;
+      const batchUpdates: { [key: string]: { count: number; batchName: string, items: any[] } } = {};
+      let hasSnapshotChange = false;
 
-    newData.forEach(item => {
-      const itemKey = `${item.batchId}-${item.id}`;
-      const currentSnapshot = `${item.status}|${item.orderCarton}|${item.Note_Purchase}|${item.Recv_Carton}|${item.Note_Stock}`;
-      const prevSnapshot = previousDataRef.current[itemKey];
-
-      if (!isInitialLoadRef.current && prevSnapshot && prevSnapshot !== currentSnapshot) {
-        setUpdatedItems(prev => new Set(prev).add(itemKey));
-        if (item.batchId) {
-          if (!batchUpdates[item.batchId]) {
-            batchUpdates[item.batchId] = { count: 0, batchName: item.batchName || item.batchId };
-          }
-          batchUpdates[item.batchId].count += 1;
+      // 1. จัดกลุ่มข้อมูล
+      newData.forEach(item => {
+        if (!item.batchId) return;
+        if (!batchUpdates[item.batchId]) {
+          batchUpdates[item.batchId] = { count: 0, batchName: item.batchName || item.batchId, items: [] };
         }
+        batchUpdates[item.batchId].items.push(item);
+      });
+
+      // ดึงสถานะที่เคยปิดไว้จาก localStorage
+      const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
+
+      Object.entries(batchUpdates).forEach(([bid, info]) => {
+        const currentBatchString = JSON.stringify(info.items);
+        const lastSnapshot = localStorage.getItem(`snapshot_${bid}`);
+
+        // ถ้าข้อมูล "เหมือนเป๊ะ" กับที่เคยปิดไป -> เงียบไว้
+        if (lastSnapshot === currentBatchString && dismissed[bid]) {
+          return; // จบการทำงาน ไม่มีการสร้าง Alert
+        }
+
+        let changeCount = 0;
+        info.items.forEach(item => {
+          const itemKey = `${item.batchId}-${item.id}`;
+          const currentItemSnap = `${item.status}|${item.orderCarton}|${item.Note_Purchase}|${item.Recv_Carton}|${item.Note_Stock}`;
+          const prevItemSnap = previousDataRef.current[itemKey];
+
+          if (!isInitialLoadRef.current && prevItemSnap && prevItemSnap !== currentItemSnap) {
+            changeCount++;
+            setUpdatedItems(prev => new Set(prev).add(itemKey));
+          }
+          
+          if (prevItemSnap !== currentItemSnap) {
+            previousDataRef.current[itemKey] = currentItemSnap;
+            hasSnapshotChange = true;
+          }
+        });
+
+        // ถ้ามีการเปลี่ยนจริง และยังไม่ถูกสั่งปิดในรอบนี้
+        if (changeCount > 0 && !dismissed[bid]) {
+          const isAlreadyShowing = notifications.some(n => n.batchId === bid);
+          if (!isAlreadyShowing) {
+            setNotifications(prev => [{
+              id: `${Date.now()}-${bid}`,
+              batchId: bid,
+              batchName: info.batchName,
+              productName: `พบอัปเดตใหม่ ${changeCount} รายการ`,
+              message: `มีการแก้ไขข้อมูลในบิลนี้`
+            }, ...prev].slice(0, 5));
+
+            if (audioRef.current) audioRef.current.play().catch(() => {});
+            
+            // อัปเดต Snapshot ล่าสุด
+            localStorage.setItem(`snapshot_${bid}`, currentBatchString);
+          }
+        } else if (changeCount > 0 && dismissed[bid]) {
+          // **สำคัญ** ถ้ามีการแก้เลขใหม่หลังจากที่พี่ปิดไปแล้ว ให้ปลดล็อกเพื่อให้เตือนใหม่
+          delete dismissed[bid];
+          localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
+        }
+      });
+
+      if (hasSnapshotChange) {
+        localStorage.setItem('sampeng_snapshot_live', JSON.stringify(previousDataRef.current));
       }
-
-      if (prevSnapshot !== currentSnapshot) {
-        previousDataRef.current[itemKey] = currentSnapshot;
-        hasSnapshotChange = true;
-      }
-    });
-
-    if (hasSnapshotChange) {
-      localStorage.setItem('sampeng_snapshot_live', JSON.stringify(previousDataRef.current));
-    }
-
-    const newAlerts = Object.entries(batchUpdates).map(([bid, info]) => ({
-      id: `${Date.now()}-${bid}`,
-      batchId: bid,
-      batchName: info.batchName,
-      productName: `มีการอัปเดตทั้งหมด ${info.count} รายการ`,
-      message: `ข้อมูลในบิลนี้มีการเปลี่ยนแปลงครับ`
-    }));
-
-    if (newAlerts.length > 0) {
-      setNotifications(prev => [...newAlerts, ...prev].slice(0, 5));
-      if (audioRef.current) {
-        audioRef.current.play().catch(() => console.log("Audio play blocked by browser"));
-      }
-    }
-
-    if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
-    }
-  };
+      if (isInitialLoadRef.current) isInitialLoadRef.current = false;
+    };
 
 const fetchStatus = async () => {
     try {
@@ -280,57 +332,31 @@ const fetchStatus = async () => {
   const totalPages = Math.ceil(allFilteredBatchIds.length / itemsPerPage);
 
   // ฟังก์ชันช่วยจัดกลุ่มข้อมูลตามวันที่ (YYYY-MM-DD)
-const groupedByDate = useMemo(() => {
-  const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
-  
-  // แก้ไข: เปลี่ยนจาก Object.entries(activeBatches) เป็นการ loop ตาม currentBatchIds (ที่มีแค่ 6 รายการ)
-  currentBatchIds.forEach((batchId) => {
-    const items = activeBatches[batchId];
-    if (!items || items.length === 0) return;
+  const groupedByDate = useMemo(() => {
+      const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
+      
+      currentBatchIds.forEach((batchId) => {
+        const items = activeBatches[batchId];
+        if (!items || items.length === 0) return;
 
-    const rawDate = items[0]?.createdAt || items[0]?.Recv_Date || "";
-    let d: Date;
+        // ✅ เรียกใช้ parseThaiDate ที่เราย้ายไปไว้ข้างบนแล้ว
+        const dateVal = items[0]?.createdAt || items[0]?.Recv_Date || "";
+        const d = parseThaiDate(dateVal);
 
-    if (typeof rawDate === 'string' && rawDate.includes('/')) {
-      const parts = rawDate.split(' ')[0].split('/');
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1;
-      let year = parseInt(parts[2]);
-      if (year > 2500) year -= 543;
-      d = new Date(year, month, day);
-    } else {
-      d = new Date(rawDate);
-    }
+        if (isNaN(d.getTime())) return;
 
-    if (isNaN(d.getTime())) d = new Date();
+        const dateKey = d.toLocaleDateString('th-TH', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
 
-    const dateKey = d.toLocaleDateString('th-TH', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+        if (!groups[dateKey]) groups[dateKey] = [];
+        groups[dateKey].push({ batchId, items });
+      });
 
-    if (!groups[dateKey]) groups[dateKey] = [];
-    groups[dateKey].push({ batchId, items });
-  });
-
-  return groups;
-}, [currentBatchIds, activeBatches]); // เพิ่ม currentBatchIds เข้าไปใน Dependency ด้วย
-
-// ฟังก์ชันแปลงวันที่แบบบังคับให้อ่านถูกทุกเครื่อง
-const parseThaiDate = (rawDate: string | number | Date) => {
-  if (typeof rawDate === 'string' && rawDate.includes('/')) {
-    const parts = rawDate.split(',')[0].split('/'); // แยก 3/4/2569 ออกมา
-    const day = parseInt(parts[0]);
-    const month = parseInt(parts[1]) - 1;
-    let year = parseInt(parts[2]);
-    
-    if (year > 2500) year -= 543; // ถ้าเป็น พ.ศ. ให้ลบออกเป็น ค.ศ. เสมอ
-    return new Date(year, month, day);
-  }
-  return new Date(rawDate);
-};
-
+      return groups;
+    }, [currentBatchIds, activeBatches]);
 
   // แก้ไข: เพิ่มการเช็คสิทธิ์ SORTING ก่อนดึงข้อมูล
   useEffect(() => {
@@ -621,8 +647,28 @@ const parseThaiDate = (rawDate: string | number | Date) => {
                     if (!batchItems) return null;
 
                     const isExpanded = expandedBatches[batchId];
-                    const hasOrdered = batchItems.some((i: OrderItem) => i.status === 'ORDERED' || i.orderCarton);
-                    const allDone = batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
+
+                    // ✅ 1. คำนวณสถานะแบบเดียวกับ Timeline เป๊ะๆ
+                    const isStep2Active = batchItems.some((i: OrderItem) => i.status !== 'PENDING' && (Number(i.orderCarton) > 0));
+                    const isStep3Active = batchItems.some((i: OrderItem) => 
+                      i.status === 'ORDERED' || 
+                      i.status === 'RECEIVED' || 
+                      (i.Recv_Carton !== '' && i.Recv_Carton !== null && Number(i.Recv_Carton) > 0)
+                    );
+                    const isStep4Active = batchItems.length > 0 && batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
+
+                    // ✅ 2. เลือก Icon และสีให้ตรงกับสถานะล่าสุดที่ไปถึง
+                    let currentIcon = '🛒';
+                    let statusBgColor = 'bg-blue-500';
+
+                    if (isStep4Active) {
+                      currentIcon = '🏁';
+                    } else if (isStep3Active) {
+                      currentIcon = '🚚';
+                    } else if (isStep2Active) {
+                      currentIcon = '🛒'; // จุดนี้ถ้าพี่อยากเปลี่ยนเป็นไอคอนอื่นที่สื่อถึง "สั่งแล้ว" ก็ได้ครับ
+                    }
+
                     const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));
 
                     return (
@@ -636,15 +682,26 @@ const parseThaiDate = (rawDate: string | number | Date) => {
                           className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
                         >
                           <div className="flex items-center gap-6">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative ${isExpanded ? 'bg-blue-600' : 'bg-slate-100'}`}>
-                              {allDone ? '✅' : hasOrdered ? '🛒' : '📦'}
+                            {/* ✅ 3. Icon หน้าชื่อจะลิ้งค์กับสถานะไทม์ไลน์แล้ว */}
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative transition-all duration-300 ${
+                              isExpanded ? 'bg-blue-600' : statusBgColor
+                            }`}>
+                              <span className={`leading-none ${currentIcon === '🚚' ? 'animate-pulse' : ''}`}>
+                                {currentIcon}
+                              </span>
+                              
                               {hasUpdateInBatch && !isExpanded && (
                                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-4 border-white rounded-full animate-ping"></span>
                               )}
                             </div>
+
                             <div className="text-left">
-                              <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>ชื่อรอบการสั่งซื้อ</span>
-                              <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">{batchItems[0]?.batchName || batchId}</h2>
+                              <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>
+                                ชื่อรอบการสั่งซื้อ
+                              </span>
+                              <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">
+                                {batchItems[0]?.batchName || batchId}
+                              </h2>
                             </div>
                           </div>
                           <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>↓</div>
@@ -652,54 +709,38 @@ const parseThaiDate = (rawDate: string | number | Date) => {
 
                         {isExpanded && (
                           <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
-                            
-                            {/* Timeline Status */}
                             <div className="max-w-3xl mx-auto bg-white p-8 rounded-[35px] shadow-sm border border-slate-100">
                               <div className="relative flex justify-between items-center px-6">
                                 <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
                                 
+                                {/* จุดที่ 1: สร้างคำขอ */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
                                   <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
                                 </div>
 
+                                {/* จุดที่ 2: สั่งซื้อแล้ว */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    batchItems.some((i: OrderItem) => i.status !== 'PENDING' && (Number(i.orderCarton) > 0)) 
-                                    ? 'bg-emerald-600 text-white shadow-lg' 
-                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                    isStep2Active ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
                                   }`}>🛒</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                                    batchItems.some((i: OrderItem) => i.status !== 'PENDING') ? 'text-emerald-600' : 'text-slate-300'
-                                  }`}>สั่งซื้อแล้ว</span>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep2Active ? 'text-emerald-600' : 'text-slate-300'}`}>สั่งซื้อแล้ว</span>
                                 </div>
 
+                                {/* จุดที่ 3: กำลังส่ง */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    batchItems.some((i: OrderItem) => 
-                                      i.status === 'ORDERED' || 
-                                      i.status === 'RECEIVED' || 
-                                      (i.Recv_Carton !== '' && i.Recv_Carton !== null && Number(i.Recv_Carton) > 0)
-                                    ) 
-                                    ? 'bg-amber-500 text-white animate-pulse shadow-lg' 
-                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                    isStep3Active ? 'bg-amber-500 text-white animate-pulse shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
                                   }`}>🚚</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                                    batchItems.some((i: OrderItem) => i.status === 'ORDERED' || i.status === 'RECEIVED') 
-                                    ? 'text-amber-600' 
-                                    : 'text-slate-300'
-                                  }`}>กำลังส่ง</span>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep3Active ? 'text-amber-600' : 'text-slate-300'}`}>กำลังส่ง</span>
                                 </div>
 
+                                {/* จุดที่ 4: เรียบร้อย */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    batchItems.every((i: OrderItem) => i.status === 'COMPLETED') 
-                                    ? 'bg-slate-900 text-white shadow-lg' 
-                                    : 'bg-white border-2 border-slate-100 text-slate-200'
+                                    isStep4Active ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
                                   }`}>🏁</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                                    batchItems.every((i: OrderItem) => i.status === 'COMPLETED') ? 'text-slate-900' : 'text-slate-300'
-                                  }`}>เรียบร้อย</span>
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep4Active ? 'text-slate-900' : 'text-slate-300'}`}>เรียบร้อย</span>
                                 </div>
                               </div>
                             </div>
