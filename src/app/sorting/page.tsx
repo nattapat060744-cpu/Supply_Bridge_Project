@@ -73,6 +73,8 @@ export default function SortingPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  const hasAutoScrolled = useRef<string | null>(null);
+
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
   const [formData, setFormData] = useState({
@@ -119,6 +121,37 @@ const allFilteredBatchIds = useMemo(() => {
     });
   }, [activeBatches, searchTerm]);
 
+ useEffect(() => {
+  // 1. หา Batch ID ล่าสุดที่มีการแจ้งเตือน
+  const latestBatchId = notifications.length > 0 ? notifications[notifications.length - 1].batchId : null;
+
+  // 2. เช็คเงื่อนไข:
+  // - ต้องมี ID ล่าสุด
+  // - ID นั้นต้อง 'ไม่ตรง' กับที่เราเพิ่งเลื่อนไป (ป้องกันการเลื่อนซ้ำ)
+  if (latestBatchId && hasAutoScrolled.current !== latestBatchId) {
+    
+    // ลองหา Element ในหน้าปัจจุบัน
+    const element = document.getElementById(`batch-${latestBatchId}`);
+    
+    if (element) {
+      // สั่งเลื่อน
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // ✅ บันทึกไว้ว่าเลื่อนไปบิลนี้แล้วนะ
+      hasAutoScrolled.current = latestBatchId;
+      
+      console.log("Auto scrolled to:", latestBatchId);
+    }
+  }
+
+  // 3. ถ้าไม่มี Notification เหลืออยู่เลย (กดรับทราบหมดแล้ว) 
+  // ให้ล้างค่าใน Ref เพื่อให้ครั้งหน้าถ้ามีบิลเดิมอัปเดตใหม่ มันจะยอมเลื่อนอีกครั้ง
+  if (notifications.length === 0) {
+    hasAutoScrolled.current = null;
+  }
+
+}, [notifications, currentPage]); // เพิ่ม currentPage เข้าไปด้วยเพื่อให้มันเช็คใหม่ตอนเปลี่ยนหน้า
+
   // ค้นหารายการที่มีปัญหาเพื่อแสดงใน Issue Tracking
   const discrepancyItems = useMemo(() => {
     const allItems: OrderItem[] = Object.values(activeBatches).flat();
@@ -156,7 +189,8 @@ const allFilteredBatchIds = useMemo(() => {
     }, [allFilteredBatchIds, activeBatches]);
 
   const clearBatchNotifications = (batchId: string) => {
-      setNotifications(prev => prev.filter(n => n.batchId !== batchId));
+  setNotifications(prev => prev.filter(n => n.batchId !== batchId));
+  // พอ notifications เปลี่ยนแปลง useEffect ด้านบนจะเช็ค notifications.length === 0 เอง
       
       // 1. ดึงรายการที่เคยปิดจากเครื่องมา แล้วเพิ่ม ID นี้เข้าไป
       const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
@@ -319,7 +353,7 @@ const fetchStatus = async () => {
       setActiveBatches(grouped);
       
       // ✅ 4. รีเซ็ตหน้ากลับมาที่หน้า 1 เมื่อข้อมูลอัปเดต (ถ้าพี่มีตัวแปร setCurrentPage)
-      setCurrentPage(1); 
+      //setCurrentPage(1); 
 
     } catch (err) {
       console.error("❌ Fetch status error:", err);
@@ -396,15 +430,19 @@ const fetchStatus = async () => {
   }, [router]);
 
   useEffect(() => {
-    const savedSnapshot = localStorage.getItem('sampeng_snapshot_live');
-    if (savedSnapshot) {
-      previousDataRef.current = JSON.parse(savedSnapshot);
-    }
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 15000);
-    return () => clearInterval(interval);
-  }, []);
+      // 1. โหลด Snapshot เก่าจากเครื่องก่อน
+      const savedSnapshot = localStorage.getItem('sampeng_snapshot_live');
+      if (savedSnapshot) {
+        previousDataRef.current = JSON.parse(savedSnapshot);
+      }
+      
+      // 2. ตั้งค่าเสียง
+      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      
+      // 3. เริ่มวงจรการดึงข้อมูล (เอา fetchStatus() ตัวบนออก ให้เหลือแค่ใน Interval พอ)
+      const interval = setInterval(fetchStatus, 30000);
+      return () => clearInterval(interval);
+    }, []);
 
   useEffect(() => {
     setCurrentPage(1);
