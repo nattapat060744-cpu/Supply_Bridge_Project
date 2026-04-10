@@ -76,6 +76,7 @@ export default function SortingPage() {
   const hasAutoScrolled = useRef<string | null>(null);
 
   const [batchName, setBatchName] = useState('');
+  
   const [items, setItems] = useState<OrderItem[]>([]);
   const [formData, setFormData] = useState({
     id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: ''
@@ -459,16 +460,29 @@ const fetchStatus = async () => {
   };
 
   const submitBatch = async () => {
-    if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
-    setIsSubmitting(true);
-    const customGroupId = batchName.trim(); 
+      if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
+      
+      setIsSubmitting(true);
+
+      // 📌 1. สร้างวันที่แบบ วัน/เดือน/ปี (พ.ศ. ย่อ)
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit'
+      });
+
+    // 📌 2. เอาชื่อที่พี่พิมพ์ มาต่อท้ายด้วยวันที่
+    // เช่น พิมพ์ว่า "ของสด" จะกลายเป็น "ของสด (10/04/69)"
+    const finalNameWithDate = `${batchName.trim()} (${dateStr})`;
+
     try {
       const res = await fetch('/api/order', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          groupId: customGroupId,
-          groupName: batchName, 
+          groupId: finalNameWithDate, // ✅ ใช้ชื่อที่เติมวันที่แล้ว
+          groupName: finalNameWithDate, // ✅ ใช้ชื่อที่เติมวันที่แล้ว
           items: items.map(it => ({
             productId: it.id,
             productName: it.name,
@@ -495,8 +509,6 @@ const fetchStatus = async () => {
       setIsSubmitting(false);
     }
   };
-
-  
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
