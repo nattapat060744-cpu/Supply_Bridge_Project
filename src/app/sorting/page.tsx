@@ -591,17 +591,26 @@ const fetchStatus = async () => {
     setFormData({ id: '', name: '', supplier: formData.supplier, storeQty: '', warehouseQty: '', note: '' });
   };
 
-  const submitBatch = async () => {
+const submitBatch = async () => {
     if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
+    
     setIsSubmitting(true);
-    const customGroupId = batchName.trim(); 
+
+    // --- ส่วนที่เพิ่ม: สร้างวันที่ปัจจุบัน (พ.ศ.) เพื่อต่อท้ายชื่อบิล ---
+    const now = new Date();
+    const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear() + 543}`;
+    
+    // รวมชื่อที่พิมพ์เข้ากับวันที่ เช่น "รอบเช้า" -> "รอบเช้า (18/04/2569)"
+    const finalBatchName = `${batchName.trim()} (${dateStr})`;
+    const customGroupId = finalBatchName; 
+
     try {
       const res = await fetch('/api/order', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           groupId: customGroupId,
-          groupName: batchName, 
+          groupName: finalBatchName, // ส่งชื่อที่มีวันที่ต่อท้ายไปด้วย
           items: items.map(it => ({
             productId: it.id,
             productName: it.name,
@@ -618,7 +627,7 @@ const fetchStatus = async () => {
         setItems([]);
         setBatchName('');
         setIsModalOpen(false);
-        fetchStatus();
+        if (typeof fetchStatus === 'function') fetchStatus();
       } else {
         alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
       }
@@ -628,8 +637,6 @@ const fetchStatus = async () => {
       setIsSubmitting(false);
     }
   };
-
-  
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
@@ -868,8 +875,7 @@ const fetchStatus = async () => {
 
                             <div className="text-left">
                               <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>
-                                {/* ✅ ใส่เงื่อนไขให้โชว์วันที่ถ้ามีข้อมูล ถ้าไม่มีให้โชว์ข้อความปกติ */}
-                                {batchItems[0]?.createdAt ? `วันที่สั่งซื้อ: ${batchItems[0].createdAt}` : 'ชื่อรอบการสั่งซื้อ'}
+                                ชื่อรอบการสั่งซื้อ
                               </span>
                               <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">
                                 {batchItems[0]?.batchName || batchId}
