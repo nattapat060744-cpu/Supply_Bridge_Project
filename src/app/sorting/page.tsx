@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 // อินเตอร์เฟซสำหรับรายการสินค้า (คงเดิมตามที่ส่งมา)
 interface OrderItem {
@@ -68,6 +70,115 @@ const parseThaiDate = (rawDate: string | number | Date) => {
   }
 
   return date;
+};
+
+const exportToExcel = async (batchId: string, activeBatches: Record<string, OrderItem[]>) => {
+  const batchItems = activeBatches[batchId];
+  if (!batchItems || batchItems.length === 0) return;
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
+
+  // --- 1. หัวเอกสาร (สร้างให้ดูเด่น) ---
+  worksheet.mergeCells('A1:L1');
+  const titleCell = worksheet.getCell('A1');
+  titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
+  titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } }; // เขียวเข้ม
+  titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(1).height = 35;
+
+  // --- 2. โครงสร้างหัวตาราง 2 ชั้น (ตามไฟล์ตัวอย่างเป๊ะๆ) ---
+  // Merge เซลล์สำหรับหัวที่ไม่มีตัวย่อย
+  const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L'];
+  mergedCols.forEach(col => worksheet.mergeCells(`${col}2:${col}3`));
+  worksheet.mergeCells('G2:J2'); // Merge "จำนวนที่สั่งซื้อ" ครอบ 4 ช่อง
+
+  // ใส่ค่าหัวตาราง
+  const h = {
+    A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
+    D2: 'สินค้าในล็อก', E2: 'สต็อก', F2: 'ว/ดป สั่งซื้อ',
+    G2: 'จำนวนที่สั่งซื้อ', G3: 'จำนวน', H3: 'ลัง/มัด',
+    I3: 'จำนวน', J3: 'ชิ้น/โหล', K2: 'หมายเหตุ จัดซื้อ', L2: 'หมายเหตุ จัดเรียง'
+  };
+  Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
+
+  // --- 3. แต่งสีหัวตาราง (ให้ดูสวยและเคลียร์) ---
+  [2, 3].forEach(rowNum => {
+    const row = worksheet.getRow(rowNum);
+    row.height = 25;
+    row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อนๆ สบายตา
+      cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+    });
+  });
+
+  // --- 4. ใส่ข้อมูลสินค้า + ทำแถวสีสลับ (Striped Rows) ---
+  batchItems.forEach((item, index) => {
+    const row = worksheet.addRow([
+      item.id,
+      item.name,
+      item.supplier,
+      item.storeQty || '0',
+      item.warehouseQty || '0',
+      item.createdAt ? parseThaiDate(item.createdAt).toLocaleDateString('th-TH') : '-',
+      item.orderCarton || '0',
+      item.cartonUnit || 'ลัง',
+      item.qtyPerCarton || '0',
+      item.innerUnit || 'ชิ้น',
+      item.Note_Purchase || '-',
+      item.note || '-'
+    ]);
+
+    row.height = 22; // เพิ่มความสูงแถวให้ไม่เบียด
+    const isEven = index % 2 === 0;
+
+    row.eachCell((cell, colNumber) => {
+      // ทำแถวสีสลับ
+      if (!isEven) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+      }
+      
+      cell.font = { size: 10, color: { argb: 'FF333333' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+        left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+        right: { style: 'thin', color: { argb: 'FFEEEEEE' } }
+      };
+
+      // ชื่อสินค้า (คอลัมน์ 2) ให้ชิดซ้ายและมีระยะห่างขอบ
+      if (colNumber === 2) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      }
+    });
+  });
+
+  // --- 5. ปรับความกว้างคอลัมน์ให้อ่านง่าย ---
+  worksheet.columns = [
+    { width: 18 }, // รหัส
+    { width: 45 }, // ชื่อสินค้า (กว้างพิเศษ)
+    { width: 25 }, // ซัพพลายเออร์
+    { width: 12 }, // ล็อก
+    { width: 10 }, // สต็อก
+    { width: 15 }, // วันที่
+    { width: 10 }, // จำนวน (ลัง)
+    { width: 10 }, // หน่วย
+    { width: 10 }, // จำนวน (ชิ้น)
+    { width: 10 }, // หน่วย
+    { width: 20 }, // หมายเหตุซื้อ
+    { width: 20 }  // หมายเหตุเรียง
+  ];
+
+  // --- 6. สร้างไฟล์และดาวน์โหลด ---
+  const buffer = await workbook.xlsx.writeBuffer();
+  saveAs(new Blob([buffer]), `ใบขอสั่งซื้อ_${batchItems[0].batchName || 'ไม่มีชื่อบิล'}.xlsx`);
 };
 
 export default function SortingPage() {
@@ -668,7 +779,7 @@ const fetchStatus = async () => {
         </div>
         
 
-{/* Batch Monitoring Section */}
+        {/* Batch Monitoring Section */}
         <section className="space-y-6">
           <div className="flex items-center gap-4 mb-6 px-2">
             <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter italic">รายการบิลที่กำลังดำเนินการ</h2>
@@ -732,26 +843,24 @@ const fetchStatus = async () => {
                     }
 
                     const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));
-
                     return (
                       <div key={batchId} id={`batch-${batchId}`} className={`rounded-[40px] overflow-hidden transition-all border border-slate-100 ${isExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-white/60 hover:bg-white'}`}>
-                        <button 
+                        <div 
                           onClick={() => {
                             const nextExpanded = !isExpanded;
                             setExpandedBatches((prev: Record<string, boolean>) => ({ ...prev, [batchId]: nextExpanded }));
                             if (nextExpanded) clearBatchNotifications(batchId);
                           }}
-                          className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
+                          className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors cursor-pointer ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
                         >
+                          {/* ฝั่งซ้าย: ไอคอนและชื่อบิล */}
                           <div className="flex items-center gap-6">
-                            {/* ✅ 3. Icon หน้าชื่อจะลิ้งค์กับสถานะไทม์ไลน์แล้ว */}
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative transition-all duration-300 ${
                               isExpanded ? 'bg-blue-600' : statusBgColor
                             }`}>
                               <span className={`leading-none ${currentIcon === '🚚' ? 'animate-pulse' : ''}`}>
                                 {currentIcon}
                               </span>
-                              
                               {hasUpdateInBatch && !isExpanded && (
                                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-4 border-white rounded-full animate-ping"></span>
                               )}
@@ -766,8 +875,25 @@ const fetchStatus = async () => {
                               </h2>
                             </div>
                           </div>
-                          <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>↓</div>
-                        </button>
+
+                          {/* ฝั่งขวา: ปุ่ม Export และ ลูกศร (รวมกลุ่มกัน) */}
+                          <div className="flex items-center gap-4">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                exportToExcel(batchId, activeBatches);
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20 whitespace-nowrap"
+                            >
+                              <span>📊</span>
+                              <span className="hidden md:inline">EXPORT EXCEL</span>
+                            </button>
+
+                            <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>
+                              ↓
+                            </div>
+                          </div>
+                        </div>
 
                         {isExpanded && (
                           <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
