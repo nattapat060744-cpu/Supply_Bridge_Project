@@ -25,7 +25,9 @@ export async function GET() {
     const allItems = rows
       .filter(r => {
         const s = (r.get('Status') || '').toString().trim().toUpperCase();
+        
         if (s === 'PENDING') return true;
+
         if (s === 'ORDERED' || s === 'COMPLETED' || s === 'RECEIVED') {
           const orderCarton = Number(r.get('Order_Carton') || 0);
           const recvCartonRaw = r.get('Recv_Carton');
@@ -33,9 +35,12 @@ export async function GET() {
           const qtyPerCarton = Number(r.get('Qty_Per_Carton') || 0);
           const recvQtyRaw = r.get('Recv_Qty');
           const recvQty = Number(recvQtyRaw || 0);
+
           const hasStartedRecv = (recvCartonRaw !== null && recvCartonRaw !== undefined && recvCartonRaw !== "") ||
                                  (recvQtyRaw !== null && recvQtyRaw !== undefined && recvQtyRaw !== "");
+
           if (!hasStartedRecv) return false;
+
           const isMismatch = (recvCarton !== orderCarton) || (recvQty !== qtyPerCarton);
           return isMismatch;
         }
@@ -43,7 +48,6 @@ export async function GET() {
       })
       .map(r => ({
         id: r.rowNumber.toString(),
-        rowId: r.rowNumber.toString(), // เพิ่ม rowId เพื่อความชัดเจน
         batchId: r.get('Group_ID') || 'ไม่มีกลุ่ม',
         productId: r.get('Product_ID') || '',
         name: r.get('Product_Name') || 'ไม่มีชื่อสินค้า',
@@ -69,29 +73,41 @@ export async function GET() {
   }
 }
 
-// --- ฟังก์ชันสร้างบิลใหม่ (POST) - คงเดิมไว้เพราะใช้สำหรับสร้างบิลแรกเริ่ม ---
+// --- ฟังก์ชันสร้างบิลใหม่ (POST) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    
+    // 1. ดักรับทั้ง batchName (จากที่พี่ส่ง) และ groupName (เผื่อไว้)
+    // 2. ดึง items ออกมา
     const { items, batchName, groupName, groupId: incomingGroupId } = body;
+
     const auth = new JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
+
     const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
+
+    // สร้าง ID กลุ่ม (ถ้าหน้าบ้านไม่ส่งมา ให้ใช้ Poo- ตามที่พี่ตั้งไว้)
     const groupId = incomingGroupId || `จัดซื้อสั่งของ-${Date.now()}`;
     const createdAt = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
 
+    // วนลูปใช้ addRow
     for (const item of items) {
       await sheet.addRow({
         'Group_ID': groupId,
+        // ✅ แก้ไข: ใช้ batchName ที่ส่งมาจากหน้าบ้าน (ถ้าไม่มีให้เช็ค groupName)
         'Group_Name': batchName || groupName || 'ไม่ได้ระบุชื่อบิล', 
         'Status': 'PENDING',
+        
+        // ✅ แก้ไข: ดักชื่อ Product_ID ทุกรูปแบบ (เช็คทั้ง productId และ Product_ID)
         'Product_ID': item.productId || item.Product_ID || item.id || '',
         'Product_Name': item.name || item.Product_Name || item.productName || '',
+        
         'Supplier': item.supplier || item.Supplier || '',
         'Shop_Qty': item.storeQty || item.Shop_Qty || '0',
         'Stock_Qty': item.warehouseQty || item.Stock_Qty || '0',
@@ -105,18 +121,19 @@ export async function POST(req: Request) {
         'Purchase_Qty': Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0)
       });
     }
+
     return NextResponse.json({ success: true, groupId });
   } catch (error: any) {
+    console.error("POST Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// --- ✅ แก้ไขฟังก์ชัน PATCH: ให้บันทึกทั้งของเก่าและของใหม่ ---
+// --- ฟังก์ชันอัปเดตข้อมูลเดิม (PATCH) ---
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { items, batchId } = body; // รับ batchId มาเพื่อระบุกลุ่มสำหรับของใหม่
-    
+    const items = body.items;
     const auth = new JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
@@ -128,40 +145,21 @@ export async function PATCH(req: Request) {
     const rows = await sheet.getRows();
 
     for (const item of items) {
-      // 1. ลองหาแถวเดิมด้วย rowId หรือ id
-      const row = rows.find(r => r.rowNumber === Number(item.rowId || item.id));
-
+      const row = rows.find(r => r.rowNumber === Number(item.id));
       if (row) {
-        // --- กรณี: มีแถวเดิมอยู่แล้ว (Update) ---
         row.set('Status', item.status || 'ORDERED');
-        row.set('Order_Carton', item.orderCarton?.toString() || '0');
+        row.set('Order_Carton', item.orderCarton || '0');
         row.set('Carton_Unit', item.cartonUnit || '');
-        row.set('Qty_Per_Carton', item.qtyPerCarton?.toString() || '0');
+        row.set('Qty_Per_Carton', item.qtyPerCarton || '0');
         row.set('Inner_Unit', item.innerUnit || '');
         row.set('Note_Purchase', item.purchaseNote || '');
-        row.set('Purchase_Qty', (Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0)).toString());
+        row.set('Purchase_Qty', Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0));
+        row.set('Note_Request', item.noteRequest || '');
         await row.save();
-      } else if (item.isAddedByPurchase) {
-        // --- กรณี: เป็นรายการใหม่ที่กดเพิ่มเข้ามา (Insert New Row) ---
-        await sheet.addRow({
-          'Group_ID': batchId || 'ไม่มีกลุ่ม',
-          'Status': 'ORDERED',
-          'Product_ID': item.id || '',
-          'Product_Name': item.name || '',
-          'Supplier': item.supplier || '',
-          'Order_Carton': item.orderCarton?.toString() || '0',
-          'Carton_Unit': item.cartonUnit || 'ลัง',
-          'Qty_Per_Carton': item.qtyPerCarton?.toString() || '0',
-          'Inner_Unit': item.innerUnit || 'ชิ้น',
-          'Note_Purchase': item.purchaseNote || '',
-          'Purchase_Qty': (Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0)).toString(),
-          'Created_At': new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
-        });
       }
     }
-    return NextResponse.json({ success: true, message: "บันทึกข้อมูลและเพิ่มรายการใหม่เรียบร้อยครับ" });
+    return NextResponse.json({ success: true, message: "อัปเดตเรียบร้อยครับ" });
   } catch (error: any) {
-    console.error("PATCH Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

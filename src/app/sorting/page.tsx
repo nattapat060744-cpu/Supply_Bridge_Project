@@ -37,20 +37,37 @@ interface Notification {
 }
 
 const parseThaiDate = (rawDate: string | number | Date) => {
-  if (!rawDate) return new Date();
+  if (!rawDate) return new Date(0);
   
-  if (typeof rawDate === 'string') {
-    const datePart = rawDate.split(' ')[0];
-    if (datePart.includes('/')) {
-      const parts = datePart.split('/');
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1;
-      let year = parseInt(parts[2]);
-      if (year > 2500) year -= 543; 
-      return new Date(year, month, day);
+  let date: Date;
+
+  if (rawDate instanceof Date) {
+    date = rawDate;
+  } else if (typeof rawDate === 'string') {
+    // แยกวันที่และเวลาจาก "17/4/2569 5:45:56"
+    const [datePart, timePart] = rawDate.split(' ');
+    const [d, m, y] = datePart.split('/').map(Number);
+    
+    // แปลง พ.ศ. เป็น ค.ศ.
+    const yearAD = y > 2500 ? y - 543 : y;
+    
+    if (timePart) {
+      const [hh, mm, ss] = timePart.split(':').map(Number);
+      date = new Date(yearAD, m - 1, d, hh, mm, ss);
+    } else {
+      date = new Date(yearAD, m - 1, d);
     }
+  } else {
+    date = new Date(rawDate);
   }
-  return new Date(rawDate);
+
+  // 🔥 ส่วนที่เพิ่มเข้าไป: ถ้าเวลาที่ได้มาเป็น UTC (ช้ากว่าไทย 7 ชม.) 
+  // ให้บวกเพิ่ม 7 ชั่วโมง เพื่อให้ตรงกับเวลาจริงในไทย
+  if (!isNaN(date.getTime())) {
+    date.setHours(date.getHours() + 7);
+  }
+
+  return date;
 };
 
 export default function SortingPage() {
@@ -76,7 +93,6 @@ export default function SortingPage() {
   const hasAutoScrolled = useRef<string | null>(null);
 
   const [batchName, setBatchName] = useState('');
-  
   const [items, setItems] = useState<OrderItem[]>([]);
   const [formData, setFormData] = useState({
     id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: ''
@@ -92,35 +108,40 @@ export default function SortingPage() {
 
   // Logic ส่วนเดิมทั้งหมด
 const allFilteredBatchIds = useMemo(() => {
-    const now = new Date().getTime();
-    const oneDayInMs = 24 * 60 * 60 * 1000;
+  const now = new Date().getTime();
+  const oneDayInMs = 24 * 60 * 60 * 1000;
 
-    return Object.keys(activeBatches).filter(batchId => {
-      const batchItems = activeBatches[batchId];
-      
-      // --- ส่วนที่เพิ่มใหม่: กรองบิลที่เสร็จแล้วเกิน 1 วัน ---
-      const allDone = batchItems.every(i => i.status === 'COMPLETED');
-      if (allDone) {
-        // หาเวลาอัปเดตล่าสุด (ถ้าไม่มีใช้เวลาปัจจุบันเพื่อไม่ให้หายไปทันที)
-        // หมายเหตุ: createdAt ในที่นี้ควรเป็นวันที่ของรายการนั้นๆ
-        const lastUpdate = batchItems[0]?.createdAt ? new Date(batchItems[0].createdAt).getTime() : now;
-        if (now - lastUpdate > oneDayInMs) {
-          return false; // ไม่แสดงบิลนี้
-        }
-      }
-      // -------------------------------------------
+  // 1. Filter ข้อมูล (คงเดิม)
+  const filtered = Object.keys(activeBatches).filter(batchId => {
+    const batchItems = activeBatches[batchId];
+    if (!batchItems || batchItems.length === 0) return false;
 
-      if (!searchTerm.trim()) return true;
-      const s = searchTerm.toLowerCase();
-      const matchBatchName = batchItems[0]?.batchName?.toLowerCase().includes(s);
-      const matchItems = batchItems.some(item => 
-        item.id?.toLowerCase().includes(s) || 
-        item.name?.toLowerCase().includes(s) || 
-        item.supplier?.toLowerCase().includes(s)
-      );
-      return matchBatchName || matchItems;
-    });
-  }, [activeBatches, searchTerm]);
+    const allDone = batchItems.every(i => i.status === 'COMPLETED');
+    if (allDone) {
+      const itemDate = batchItems[0]?.createdAt;
+      const lastUpdate = parseThaiDate(itemDate || "").getTime();
+      if (now - lastUpdate > oneDayInMs) return false;
+    }
+
+    if (!searchTerm.trim()) return true;
+    const s = searchTerm.toLowerCase();
+    const matchBatchName = batchItems[0]?.batchName?.toLowerCase().includes(s);
+    const matchItems = batchItems.some(item => 
+      item.id?.toLowerCase().includes(s) || 
+      item.name?.toLowerCase().includes(s) || 
+      item.supplier?.toLowerCase().includes(s)
+    );
+    return matchBatchName || matchItems;
+  });
+
+  // 2. 🔥 Sort ใหม่ล่าสุด (Index 0) ไปเก่า เพื่อให้บิลใหม่ขึ้นหน้า 1
+  return filtered.sort((a, b) => {
+    const timeA = parseThaiDate(activeBatches[a][0]?.createdAt || "").getTime();
+    const timeB = parseThaiDate(activeBatches[b][0]?.createdAt || "").getTime();
+    return timeB - timeA; 
+  });
+
+}, [activeBatches, searchTerm]);
 
  useEffect(() => {
   // 1. หา Batch ID ล่าสุดที่มีการแจ้งเตือน
@@ -460,29 +481,16 @@ const fetchStatus = async () => {
   };
 
   const submitBatch = async () => {
-      if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
-      
-      setIsSubmitting(true);
-
-      // 📌 1. สร้างวันที่แบบ วัน/เดือน/ปี (พ.ศ. ย่อ)
-      const today = new Date();
-      const dateStr = today.toLocaleDateString('th-TH', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit'
-      });
-
-    // 📌 2. เอาชื่อที่พี่พิมพ์ มาต่อท้ายด้วยวันที่
-    // เช่น พิมพ์ว่า "ของสด" จะกลายเป็น "ของสด (10/04/69)"
-    const finalNameWithDate = `${batchName.trim()} (${dateStr})`;
-
+    if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
+    setIsSubmitting(true);
+    const customGroupId = batchName.trim(); 
     try {
       const res = await fetch('/api/order', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          groupId: finalNameWithDate, // ✅ ใช้ชื่อที่เติมวันที่แล้ว
-          groupName: finalNameWithDate, // ✅ ใช้ชื่อที่เติมวันที่แล้ว
+          groupId: customGroupId,
+          groupName: batchName, 
           items: items.map(it => ({
             productId: it.id,
             productName: it.name,
@@ -509,6 +517,8 @@ const fetchStatus = async () => {
       setIsSubmitting(false);
     }
   };
+
+  
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
@@ -699,7 +709,9 @@ const fetchStatus = async () => {
                     const isExpanded = expandedBatches[batchId];
 
                     // ✅ 1. คำนวณสถานะแบบเดียวกับ Timeline เป๊ะๆ
-                    const isStep2Active = batchItems.some((i: OrderItem) => i.status !== 'PENDING' && (Number(i.orderCarton) > 0));
+                    const isStep2Active = batchItems.some((i: OrderItem) => 
+                      i.status !== 'PENDING' && (Number(i.orderCarton) > 0 || Number(i.qtyPerCarton) > 0)
+                    );
                     const isStep3Active = batchItems.some((i: OrderItem) => 
                       i.status === 'ORDERED' || 
                       i.status === 'RECEIVED' || 

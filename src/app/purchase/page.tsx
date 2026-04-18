@@ -36,8 +36,7 @@ interface OrderItem {
   storeQty?: string;
   note?: string;
   Recv_Date?: string; // เพิ่มฟิลด์วันที่รับของ
-  notePur ?: string; // หมายเหตุจากจัดซื้อ
-  isAddedByPurchase?: boolean; // เพิ่มเพื่อระบุว่าจัดซื้อเป็นคนเพิ่ม
+   notePur ?: string; // หมายเหตุจากจัดซื้อ
 }
 
 interface Notification {
@@ -73,9 +72,7 @@ export default function PurchasePage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
   const [rawData, setRawData] = useState<OrderItem[]>([]);
-  const [extraItems, setExtraItems] = useState<OrderItem[]>([]);
-  const [isAddingToReview, setIsAddingToReview] = useState(false);
-
+  
   const discrepancyItems = useMemo(() => {
     if (!rawData) return [];
     return rawData.filter((item: OrderItem) => {
@@ -100,70 +97,55 @@ export default function PurchasePage() {
     });
   }, [rawData]);
 
-  const handleAddExtraItem = () => {
-    const newItem: OrderItem = {
-      tempId: Date.now(),
-      id: '', 
-      name: '',
-      supplier: '',
-      orderCarton: '',
-      qtyPerCarton: '',
-      cartonUnit: 'ลัง',
-      innerUnit: 'ชิ้น',
-      notePurchase: '',
-      isRejected: false,
-      warehouseQty: '0',
-      orderQty: '0'
-    };
-    setExtraItems(prev => [newItem, ...prev]);
-  };
+const fetchPendingOrders = async (retries = 2) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const fetchPendingOrders = async (retries = 2) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(`/api/purchase?t=${Date.now()}`, {
+        signal: controller.signal,
+        cache: 'no-store'
+      });
 
-      try {
-        const res = await fetch(`/api/purchase?t=${Date.now()}`, {
-          signal: controller.signal,
-          cache: 'no-store'
-        });
+      if (!res.ok) throw new Error('การเชื่อมต่อเครือข่ายมีปัญหา');
+      
+      const data = await res.json();
+      setRawData(data);
 
-        if (!res.ok) throw new Error('การเชื่อมต่อเครือข่ายมีปัญหา');
-        
-        const data = await res.json();
-        setRawData(data);
+      // ✅ แก้จุดนี้: เรียงข้อมูลจากใหม่ไปเก่า (Created_At)
+      const sortedData = Array.isArray(data) 
+        ? [...data].sort((a: any, b: any) => {
+            const dateA = new Date(a.Created_At || a.createdAt || 0).getTime();
+            const dateB = new Date(b.Created_At || b.createdAt || 0).getTime();
+            return dateB - dateA; // ใหม่ล่าสุดอยู่บนสุด
+          }) 
+        : [];
 
-        // ✅ แก้จุดนี้: เรียงข้อมูลจากใหม่ไปเก่า (Created_At)
-        const sortedData = Array.isArray(data) 
-          ? [...data].sort((a: any, b: any) => {
-              const dateA = new Date(a.Created_At || a.createdAt || 0).getTime();
-              const dateB = new Date(b.Created_At || b.createdAt || 0).getTime();
-              return dateB - dateA; // ใหม่ล่าสุดอยู่บนสุด
-            }) 
-          : [];
+      const pendingItems = sortedData.filter((item: any) => item.status === 'PENDING');
+      
+      const grouped = pendingItems.reduce((acc: any, item: any) => {
+        const key = item.batchId || item.Group_ID || 'ทั่วไป';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {});
 
-        const pendingItems = sortedData.filter((item: any) => item.status === 'PENDING');
-        
-        const grouped = pendingItems.reduce((acc: any, item: any) => {
-          const key = item.batchId || item.Group_ID || 'ทั่วไป';
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(item);
-          return acc;
-        }, {});
+      setBatches(grouped);
+      
+      // ✅ เพิ่มบรรทัดนี้: ให้กลับไปหน้า 1 เสมอเมื่อโหลดข้อมูลใหม่
+      setCurrentPage(1); 
 
-        setBatches(grouped);
-
-      } catch (err: any) {
-        if (retries > 0 && err.name !== 'AbortError') {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          return fetchPendingOrders(retries - 1);
-        }
-        console.error(err);
-      } finally {
-        clearTimeout(timeoutId);
-        setLoading(false);
+    } catch (err: any) {
+      if (retries > 0 && err.name !== 'AbortError') {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchPendingOrders(retries - 1);
       }
-    };
+      console.error(err);
+    } finally {
+      clearTimeout(timeoutId);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => { 
     fetchPendingOrders();
@@ -175,41 +157,41 @@ export default function PurchasePage() {
     setOpenBatches((prev: any) => ({ ...prev, [batchId]: !prev[batchId] }));
   };
 
-  useEffect(() => {
-      const checkAuthAndFetch = async () => {
-        if (typeof window === 'undefined') return;
+useEffect(() => {
+    const checkAuthAndFetch = async () => {
+      if (typeof window === 'undefined') return;
 
-        const savedUserStr = localStorage.getItem('user');
-        const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่จากเครื่องมา
-        const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
+      const savedUserStr = localStorage.getItem('user');
+      const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่จากเครื่องมา
+      const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
 
-        // 1. ดักจับถ้าไม่ได้ Login หรือ "วันที่ไม่ตรงกับวันนี้" (ข้ามวัน)
-        if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
-          // ถ้าข้ามวัน ไม่ต้อง Alert ซ้ำก็ได้ครับ ให้ดีดกลับหน้า Login เงียบๆ 
-          // เพราะ Navbar จะเป็นคน Alert บอกเองอยู่แล้ว
+      // 1. ดักจับถ้าไม่ได้ Login หรือ "วันที่ไม่ตรงกับวันนี้" (ข้ามวัน)
+      if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
+        // ถ้าข้ามวัน ไม่ต้อง Alert ซ้ำก็ได้ครับ ให้ดีดกลับหน้า Login เงียบๆ 
+        // เพราะ Navbar จะเป็นคน Alert บอกเองอยู่แล้ว
+        router.push('/');
+        return;
+      }
+
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        // 2. เช็คสิทธิ์แผนก (คงเดิม)
+        if (!savedUser.name || (savedUser.department !== 'PURCHASE' && savedUser.department !== 'ADMIN')) {
+          alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
           router.push('/');
           return;
         }
 
-        try {
-          const savedUser = JSON.parse(savedUserStr);
-          // 2. เช็คสิทธิ์แผนก (คงเดิม)
-          if (!savedUser.name || (savedUser.department !== 'PURCHASE' && savedUser.department !== 'ADMIN')) {
-            alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
-            router.push('/');
-            return;
-          }
+        // 3. ถ้าผ่านเงื่อนไข ค่อยโหลดข้อมูล
+        await fetchPendingOrders(); 
+      } catch (e) {
+        console.error("Auth Error:", e);
+        router.push('/');
+      }
+    };
 
-          // 3. ถ้าผ่านเงื่อนไข ค่อยโหลดข้อมูล
-          await fetchPendingOrders(); 
-        } catch (e) {
-          console.error("Auth Error:", e);
-          router.push('/');
-        }
-      };
-
-      checkAuthAndFetch();
-    }, [router]);
+    checkAuthAndFetch();
+  }, [router]);
 
   const handleOpenReview = (batchId: string) => {
     const itemsForReview = batches[batchId].map((item: any) => ({
@@ -228,74 +210,36 @@ export default function PurchasePage() {
     setReviewBatch(batchId);
   };
 
-// ฟังก์ชันสำหรับเพิ่มแถวใหม่ในหน้า Review (จัดซื้อเพิ่มเอง)
-  const handleAddItemToReview = () => {
-    const newItem: OrderItem = {
-      id: `NEW-${Date.now()}`, // สร้าง ID ชั่วคราว
-      productId: '',
-      name: '',
-      supplier: '',
-      orderCarton: '',
-      qtyPerCarton: '',
-      cartonUnit: 'ลัง',
-      innerUnit: 'ชิ้น',
-      notePurchase: '',
-      isRejected: false,
-      orderQty: '0',
-      warehouseQty: '0',
-      // @ts-ignore
-      isAddedByPurchase: true // ตัวระบุว่าเป็นรายการเพิ่มเอง
-    };
-    setReviewItems(prev => [newItem, ...prev]);
-    setIsAddingToReview(true); // บอกว่ารอบนี้เพิ่มเข้า Review นะ
-    setIsModalOpen(true);      // เปิด Modal ตัวสร้างบิล
-  };
-
   const handleFinalConfirm = async () => {
-  if (isSubmitting) return;
-  
-  const invalidItems = reviewItems.filter(item => !item.isRejected && !item.name);
-  if (invalidItems.length > 0) {
-    alert("กรุณาระบุชื่อสินค้าให้ครบถ้วนก่อนบันทึกครับ");
-    return;
-  }
+    if (isSubmitting) return;
+    if (!confirm(`ยืนยันการบันทึกรายการชุดนี้ใช่ไหมครับ?`)) return;
 
-  if (!confirm(`ยืนยันการบันทึกรายการสั่งซื้อทั้งหมด ${reviewItems.filter(i => !i.isRejected).length} รายการ?`)) return;
+    setIsSubmitting(true);
+    try {
+      const itemsToSubmit = reviewItems.map(item => ({
+        id: item.id || (item as any).ID || (item as any).rowNumber, 
+        status: item.isRejected ? 'REJECTED' : 'ORDERED',
+        orderCarton: item.orderCarton,
+        cartonUnit: item.cartonUnit,
+        qtyPerCarton: item.qtyPerCarton,
+        innerUnit: item.innerUnit,
+        purchaseNote: item.notePurchase,
+        purchaseQty: Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0)
+      }));
 
-  setIsSubmitting(true);
-  try {
-  const itemsToSubmit = reviewItems
-    .filter(item => !item.isRejected)
-    .map(item => ({
-      rowId: item.rowId, // ตัวเดิมจะมี rowId
-      id: item.productId || item.Product_ID || item.id,
-      name: item.name || item.Product_Name,
-      supplier: item.supplier || item.Supplier,
-      orderCarton: item.orderCarton,
-      qtyPerCarton: item.qtyPerCarton,
-      cartonUnit: item.cartonUnit,
-      innerUnit: item.innerUnit,
-      purchaseNote: item.notePurchase,
-      isAddedByPurchase: (item as any).isAddedByPurchase || false // ✅ ต้องมีตัวนี้ส่งไป API
-    }));
-
-  // ส่งไปที่ API PATCH
-  const res = await fetch('/api/purchase', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      items: itemsToSubmit,
-      batchId: reviewBatch 
-    }),
-  });
+      const res = await fetch('/api/purchase', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToSubmit }),
+      });
 
       if (res.ok) {
-        alert('🚀 บันทึกข้อมูลและเพิ่มรายการใหม่ลงบิลเรียบร้อย!');
+        alert('🚀 บันทึกเรียบร้อย!');
         setReviewBatch(null);
         fetchPendingOrders();
       } else {
         const errorData = await res.json();
-        alert(`❌ ผิดพลาด: ${errorData.message}`);
+        alert(`❌ บันทึกไม่สำเร็จ: ${errorData.message || 'ตรวจเช็ค API อีกทีครับ'}`);
       }
     } catch (err) {
       console.error(err);
@@ -305,71 +249,22 @@ export default function PurchasePage() {
     }
   };
 
-const addItemToTempList = (e: React.FormEvent) => {
+  // ฟังก์ชันสำหรับระบบสร้างบิลใหม่
+  const addItemToTempList = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.id || !formData.name) {
-      // ✅ แก้ Error: เพิ่ม property ให้ครบตาม Notification interface
-      const newNotify: any = { 
-        id: Date.now().toString(), 
-        message: 'กรุณาระบุรหัสและชื่อสินค้า', 
-        type: 'error',
-        batchId: '', 
-        productName: '', 
-        batchName: ''
-      };
-      setNotifications(prev => [...prev, newNotify]);
-      return;
-    }
-
+    if (!formData.id || !formData.name) return alert('กรุณาระบุรหัสและชื่อสินค้าครับ');
+    
     const newItem: OrderItem = {
-      tempId: Number(`${Date.now()}${Math.floor(Math.random() * 1000)}`), 
       id: formData.id,
-      productId: formData.id,
-      Product_ID: formData.id,
       name: formData.name,
-      Product_Name: formData.name,
       supplier: formData.supplier,
-      Supplier: formData.supplier,
       storeQty: formData.storeQty,
       warehouseQty: formData.warehouseQty,
-      orderQty: formData.storeQty,
-      orderCarton: '',
-      qtyPerCarton: '',
-      cartonUnit: 'ลัง',
-      innerUnit: 'ชิ้น',
-      notePurchase: formData.note,
-      isRejected: false,
-      isAddedByPurchase: true
+      note: formData.note,
+      tempId: Date.now()
     };
 
-    if (isAddingToReview) {
-      // ✅ เพิ่มเข้าบิลอย่างเดียว (หน้าต่างขวา)
-      // รายการนี้จะไปโผล่แค่ใน Modal บิลที่พี่ชายกำลังตรวจ ไม่หลุดไปข้างนอก
-      setReviewItems(prev => [...prev, newItem]);
-      const newNotify: any = { 
-        id: Date.now().toString(), 
-        message: 'เพิ่มรายการเข้าบิลเรียบร้อย', 
-        type: 'success',
-        batchId: '', 
-        productName: '', 
-        batchName: '' 
-      };
-      setNotifications(prev => [...prev, newNotify]);
-    } else {
-      // ✅ เพิ่มลงลิสต์ปกติ (กรณีสร้างบิลใหม่ตั้งแต่ต้น)
-      setItems(prev => [...prev, newItem]);
-      const newNotify: any = { 
-        id: Date.now().toString(), 
-        message: 'เพิ่มรายการลงในลิสต์แล้ว', 
-        type: 'success',
-        batchId: '', 
-        productName: '', 
-        batchName: ''
-      };
-      setNotifications(prev => [...prev, newNotify]);
-    }
-
-    // ล้างข้อมูลในฟอร์มหลังเพิ่มเสร็จ
+    setItems([...items, newItem]);
     setFormData({ id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: '' });
   };
 
@@ -400,21 +295,6 @@ const addItemToTempList = (e: React.FormEvent) => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-const closeModal = () => {
-    setIsModalOpen(false);
-    setIsAddingToReview(false);
-    
-    // ✅ เพิ่มชุดนี้เข้าไปเพื่อล้างฟอร์มเมื่อกดปิดหน้าต่าง
-    setFormData({ 
-      id: '', 
-      name: '', 
-      supplier: '', 
-      storeQty: '', 
-      warehouseQty: '', 
-      note: '' 
-    });
   };
 
   const autoFillOrderQty = () => {
@@ -786,37 +666,24 @@ const closeModal = () => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-2 md:p-6">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col border border-white animate-in fade-in zoom-in-95 duration-300">
             
-            {/* --- Header --- */}
             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <div>
                   <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">ยืนยันรายการสั่งซื้อ</p>
                   <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900">ตรวจสอบ: {reviewBatch}</h2>
                 </div>
-                
-                <div className="flex gap-2">
-                  <button 
-                    onClick={autoFillOrderQty}
-                    className="bg-slate-100 hover:bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 border border-emerald-100"
-                  >
-                    ⚡ สั่งตามยอดหน้าร้าน
-                  </button>
-                    
-                  <button 
-                    onClick={handleAddItemToReview}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg"
-                  >
-                    + เพิ่มรายการนอกใบสั่ง
-                  </button>
-                </div>
+                <button 
+                  onClick={autoFillOrderQty}
+                  className="bg-slate-100 hover:bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 border border-emerald-100"
+                >
+                  ⚡ สั่งตามยอดหน้าร้าน
+                </button>
               </div>
-              
               <button onClick={() => setReviewBatch(null)} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
                 <span className="text-2xl">✕</span>
               </button>
             </div>
             
-            {/* --- Table Header --- */}
             <div className="flex-1 overflow-hidden flex flex-col bg-slate-50/30">
               <div className="px-6 md:px-10 py-4 bg-slate-900 shadow-lg z-10 shrink-0">
                 <div className="flex items-center gap-6">
@@ -832,120 +699,30 @@ const closeModal = () => {
                 </div>
               </div>
 
-              {/* --- Items List --- */}
               <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-3 custom-scrollbar">
                 {reviewItems.map((item, idx) => (
-                  <div 
-                    key={item.rowId || item.id || `review-${idx}`} // ✅ ใช้ rowId หรือ id ถ้าไม่มีให้ใช้ index
-                    className={`p-4 rounded-3xl border transition-all duration-300 flex flex-col md:flex-row items-center gap-6 
-                      ${(item as any).isAddedByPurchase 
-                        ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/10' 
-                        : item.isRejected ? 'bg-red-50/50 border-red-100 opacity-60' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-md'
-                      }`}
-                  >
+                  <div key={`review-item-${item.id || idx}`} className={`p-4 rounded-3xl border transition-all duration-300 flex flex-col md:flex-row items-center gap-6 ${item.isRejected ? 'bg-red-50/50 border-red-100 opacity-60' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-md'}`}>
                     <div className="flex-1 min-w-50 w-full">
-                      {(item as any).isAddedByPurchase && (
-                        <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest mb-2 inline-block animate-pulse">
-                          ✨ จัดซื้อเพิ่มเอง
-                        </span>
-                      )}
-
-                      {(item as any).isAddedByPurchase ? (
-                        <div className="space-y-2">
-                          <input 
-                            type="text" 
-                            className="w-full bg-white border border-blue-200 p-1.5 px-3 rounded-lg text-[10px] font-bold outline-none focus:ring-2 ring-blue-500"
-                            placeholder="รหัสสินค้า (Product ID)..."
-                            value={item.productId || item.Product_ID || ''}
-                            onChange={(e) => {
-                              const newItems = [...reviewItems];
-                              newItems[idx].productId = e.target.value;
-                              newItems[idx].Product_ID = e.target.value;
-                              setReviewItems(newItems);
-                            }}
-                          />
-                          <input 
-                            type="text" 
-                            className="w-full bg-white border border-blue-200 p-2 rounded-xl font-black text-sm outline-none focus:ring-2 ring-blue-500"
-                            placeholder="พิมพ์ชื่อสินค้า..."
-                            value={item.name}
-                            onChange={(e) => {
-                              const newItems = [...reviewItems];
-                              newItems[idx].name = e.target.value;
-                              setReviewItems(newItems);
-                            }}
-                          />
-                          <input 
-                            type="text" 
-                            className="w-full bg-white border border-blue-100 p-1.5 px-3 rounded-lg text-[10px] font-bold outline-none"
-                            placeholder="ระบุซัพพลายเออร์..."
-                            value={item.supplier}
-                            onChange={(e) => {
-                              const newItems = [...reviewItems];
-                              newItems[idx].supplier = e.target.value;
-                              setReviewItems(newItems);
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">ID: {item.productId || item.Product_ID}</span>
-                          <div className="font-black text-base text-slate-800 uppercase italic truncate">{item.name || item.Product_Name}</div>
-                          <span className="text-[9px] font-bold text-emerald-600 uppercase">ซัพ: {item.supplier || item.Supplier}</span>
-                        </>
-                      )}
+                      <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">ID: {item.productId || item.Product_ID}</span>
+                      <div className="font-black text-base text-slate-800 uppercase italic truncate">{item.name || item.Product_Name}</div>
+                      <span className="text-[9px] font-bold text-emerald-600 uppercase">ซัพ: {item.supplier || item.Supplier}</span>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3 min-w-50">
-                      <div className={`p-3 rounded-2xl border flex flex-col items-center justify-center ${(item as any).isAddedByPurchase ? 'bg-white border-blue-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1">ยอดจากร้าน</span>
-                        {(item as any).isAddedByPurchase ? (
-                          <input 
-                            type="number"
-                            className="w-12 bg-transparent text-center font-black text-xl text-blue-600 outline-none"
-                            placeholder="0"
-                            value={item.orderQty || item.Shop_Qty || ''}
-                            onChange={(e) => {
-                              const newItems = [...reviewItems];
-                              newItems[idx].orderQty = e.target.value;
-                              newItems[idx].Shop_Qty = e.target.value;
-                              setReviewItems(newItems);
-                            }}
-                          />
-                        ) : (
-                          <span className="text-xl font-black text-slate-900">{item.orderQty || item.Shop_Qty}</span>
-                        )}
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col items-center justify-center">
+                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1 md:hidden">ยอดจากร้าน</span>
+                        <span className="text-xl font-black text-slate-900">{item.orderQty || item.Shop_Qty}</span>
                       </div>
-
-                      <div className={`p-3 rounded-2xl border flex flex-col items-center justify-center 
-                        ${(item as any).isAddedByPurchase ? 'bg-white border-blue-200 shadow-sm' : (Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100')}`}
-                      >
-                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1">คลังเหลือ</span>
-                        {(item as any).isAddedByPurchase ? (
-                          <input 
-                            type="number"
-                            className="w-12 bg-transparent text-center font-black text-xl text-blue-600 outline-none"
-                            placeholder="0"
-                            value={item.warehouseQty || item.Stock_Qty || ''}
-                            onChange={(e) => {
-                              const newItems = [...reviewItems];
-                              newItems[idx].warehouseQty = e.target.value;
-                              newItems[idx].Stock_Qty = e.target.value;
-                              setReviewItems(newItems);
-                            }}
-                          />
-                        ) : (
-                          <span className={`text-xl font-black ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'text-red-500' : 'text-slate-900'}`}>
-                            {item.warehouseQty || item.Stock_Qty}
-                          </span>
-                        )}
+                      <div className={`p-3 rounded-2xl border flex flex-col items-center justify-center ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1 md:hidden">คลังเหลือ</span>
+                        <span className={`text-xl font-black ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'text-red-500' : 'text-slate-900'}`}>{item.warehouseQty || item.Stock_Qty}</span>
                       </div>
                     </div>
 
                     {!item.isRejected ? (
                       <div className="flex items-center bg-slate-100/50 p-1.5 rounded-3xl border border-slate-200 shadow-sm gap-1">
-                        <div className={`flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border group transition-all hover:border-emerald-400 ${(item as any).isAddedByPurchase ? 'border-blue-200' : 'border-emerald-100'}`}>
-                          <span className={`text-[8px] font-black uppercase tracking-tighter mb-1 opacity-70 ${(item as any).isAddedByPurchase ? 'text-blue-600' : 'text-emerald-600'}`}>สั่ง (ลัง)</span>
+                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border border-emerald-100 group transition-all hover:border-emerald-400">
+                          <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter mb-1 opacity-70">สั่ง (ลัง)</span>
                           <div className="flex items-baseline gap-1">
                             <input 
                               type="number" 
@@ -973,7 +750,7 @@ const closeModal = () => {
 
                         <div className="flex items-center justify-center w-6 text-slate-300 font-light text-2xl">×</div>
 
-                        <div className={`flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border group transition-all hover:border-blue-400 ${(item as any).isAddedByPurchase ? 'border-blue-200' : 'border-blue-100'}`}>
+                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border border-blue-100 group transition-all hover:border-blue-400">
                           <span className="text-[8px] font-black text-blue-600 uppercase tracking-tighter mb-1 opacity-70">แพ็ค (ชิ้น)</span>
                           <div className="flex items-baseline gap-1">
                             <input 
@@ -1010,7 +787,7 @@ const closeModal = () => {
                       <input 
                         type="text" 
                         placeholder="ระบุหมายเหตุถึงจัดซื้อ..." 
-                        className={`w-full p-4 bg-white border rounded-2xl text-xs font-bold text-slate-800 outline-none transition-all shadow-sm ${(item as any).isAddedByPurchase ? 'border-blue-200 focus:border-blue-500' : 'border-slate-200 focus:border-emerald-500'}`} 
+                        className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all shadow-sm" 
                         value={item.notePurchase} 
                         onChange={(e) => {
                           const newItems = [...reviewItems];
@@ -1033,33 +810,30 @@ const closeModal = () => {
                   </div>
                 ))}
               </div>
+            </div>
 
-              {/* --- Footer Action Bar (ปุ่มบันทึกล่างสุด) --- */}
-              <div className="p-8 border-t border-slate-100 flex justify-between items-center bg-white shrink-0">
-                <div className="flex items-center gap-4">
-                  <p className="text-2xl font-black text-slate-900 leading-none">
-                    {reviewItems.filter(i => !i.isRejected).length} <span className="text-emerald-600 uppercase">รายการพร้อมสั่ง</span>
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setReviewBatch(null)} 
-                    className="px-8 py-5 font-black text-[12px] uppercase text-slate-400 hover:text-slate-900 transition-all"
-                  >
-                    ปิดหน้าต่าง
-                  </button>
-                  
-                  <button 
-                    onClick={handleFinalConfirm} 
-                    disabled={isSubmitting || reviewItems.length === 0}
-                    className="bg-slate-900 text-white hover:bg-emerald-600 px-12 py-5 rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-400"
-                  >
-                    {isSubmitting ? 'กำลังบันทึกข้อมูล... ⏳' : '🚀 ยืนยันสั่งซื้อสินค้า'}
-                  </button>
-                </div>
+            <div className="p-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6 bg-white shrink-0">
+              <div className="flex items-center gap-4">
+                 <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                    <span className="text-2xl">📦</span>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">สถานะคิวงาน</p>
+                   <p className="text-2xl font-black text-slate-900 leading-none">
+                     {reviewItems.filter(i => !i.isRejected).length} <span className="text-emerald-600">รายการพร้อมสั่ง</span>
+                   </p>
+                 </div>
               </div>
-
+              <div className="flex gap-3 w-full md:w-auto">
+                <button onClick={() => setReviewBatch(null)} className="px-8 py-5 font-black text-[12px] uppercase text-slate-400 hover:text-slate-900 transition-all">ยกเลิก</button>
+                <button 
+                  onClick={handleFinalConfirm} 
+                  disabled={isSubmitting || reviewItems.every(i => !i.orderCarton && !i.isRejected)} 
+                  className="flex-1 md:flex-none bg-slate-900 text-white hover:bg-emerald-600 px-12 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-300"
+                >
+                  {isSubmitting ? 'กำลังส่งข้อมูล...' : '🚀 ยืนยันสั่งซื้อสินค้า'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1069,34 +843,25 @@ const closeModal = () => {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-2 md:p-6">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col border border-white animate-in fade-in zoom-in-95 duration-300">
-            
-            {/* Header */}
-            <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-              <div>
-                <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">
-                  {isAddingToReview ? `เพิ่มรายการเข้าบิล: ${reviewBatch}` : "สร้างคำขอสั่งซื้อใหม่"}
-                </p>
-                <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900 italic">
-                  {isAddingToReview ? "ADD EXTRA" : "NEW PURCHASE"} <span className="text-emerald-600 not-italic">ITEM</span>
-                </h2>
-              </div>
-                <button 
-                  onClick={closeModal} // ✅ เช็คตรงนี้ให้เรียก closeModal นะครับ (ไม่ใช่ setIsModalOpen(false) ตรงๆ)
-                  className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-                >
+             
+             {/* Header */}
+             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                <div>
+                  <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">สร้างคำขอสั่งซื้อใหม่</p>
+                  <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900 italic">NEW PURCHASE <span className="text-emerald-600 not-italic">BATCH</span></h2>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
                   <span className="text-2xl">✕</span>
                 </button>
-            </div>
+             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-50/30">
-              
-              {/* Left Side: Form */}
-              <div className="w-full md:w-[45%] p-6 md:p-10 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                <div className="space-y-8">
-                  
-                  {/* Step 1: จะโชว์เฉพาะตอนสร้างบิลใหม่เท่านั้น */}
-                  {!isAddingToReview && (
+             {/* Content Area */}
+             <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-50/30">
+                
+                {/* Left Side: Form */}
+                <div className="w-full md:w-[45%] p-6 md:p-10 overflow-y-auto custom-scrollbar border-r border-slate-100">
+                  <div className="space-y-8">
+                    {/* Step 1 */}
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black italic">01</span>
@@ -1110,162 +875,106 @@ const closeModal = () => {
                         onChange={(e) => setBatchName(e.target.value)}
                       />
                     </div>
-                  )}
 
-                  {/* Step 2: ฟอร์มเพิ่มสินค้า */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black italic">
-                        {isAddingToReview ? "01" : "02"}
-                      </span>
-                      <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">ระบุรายละเอียดสินค้า</h3>
-                    </div>
-                    
-                    <form onSubmit={addItemToTempList} className="space-y-3 bg-white p-6 rounded-4xl border border-slate-200 shadow-sm">
-                      <div className="grid grid-cols-2 gap-3">
-                        <input 
-                          type="text" placeholder="รหัสสินค้า" 
-                          className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                          value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})}
-                        />
-                        <input 
-                          type="text" placeholder="ชื่อสินค้า" 
-                          className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                          value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                        />
-                        <input 
-                          type="number" placeholder="หน้าร้านมี..." 
-                          className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                          value={formData.storeQty} onChange={e => setFormData({...formData, storeQty: e.target.value})}
-                        />
-                        <input 
-                          type="number" placeholder="ในคลังมี..." 
-                          className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                          value={formData.warehouseQty} onChange={e => setFormData({...formData, warehouseQty: e.target.value})}
-                        />
+                    {/* Step 2 */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black italic">02</span>
+                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">เพิ่มรายการสินค้า</h3>
                       </div>
-                      <input 
-                        type="text" placeholder="ชื่อซัพพลายเออร์ (ถ้าทราบ)" 
-                        className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                        value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})}
-                      />
-                      <textarea 
-                        placeholder="หมายเหตุถึงฝ่ายจัดซื้อ..." 
-                        className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-24 resize-none"
-                        value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}
-                      />
-                      <button 
-                        type="submit"
-                        className={`w-full py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 ${
-                          isAddingToReview 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white' // สีน้ำเงินถ้าเป็นการเพิ่มเข้าบิลเดิม
-                          : 'bg-slate-900 hover:bg-emerald-600 text-white' // สีดำถ้าสร้างบิลใหม่
-                        }`}
-                      >
-                        {isAddingToReview ? "✨ เพิ่มเข้ารอบสั่งซื้อนี้ทันที" : "+ เพิ่มรายการลงในบิล"}
-                      </button>
-                    </form>
+                      
+                      <form onSubmit={addItemToTempList} className="space-y-3 bg-white p-6 rounded-4xl border border-slate-200 shadow-sm">
+                        <div className="grid grid-cols-2 gap-3">
+                          <input 
+                            type="text" placeholder="รหัสสินค้า" 
+                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})}
+                          />
+                          <input 
+                            type="text" placeholder="ชื่อสินค้า" 
+                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                          />
+                          <input 
+                            type="number" placeholder="หน้าร้านมี..." 
+                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            value={formData.storeQty} onChange={e => setFormData({...formData, storeQty: e.target.value})}
+                          />
+                          <input 
+                            type="number" placeholder="ในคลังมี..." 
+                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            value={formData.warehouseQty} onChange={e => setFormData({...formData, warehouseQty: e.target.value})}
+                          />
+                        </div>
+                        <input 
+                          type="text" placeholder="ชื่อซัพพลายเออร์ (ถ้าทราบ)" 
+                          className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                          value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})}
+                        />
+                        <textarea 
+                          placeholder="หมายเหตุถึงฝ่ายจัดซื้อ..." 
+                          className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-24 resize-none"
+                          value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}
+                        />
+                        <button 
+                          type="submit"
+                          className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:bg-blue-600 transition-all active:scale-95"
+                        >
+                          + เพิ่มรายการนี้
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Right Side: Preview หรือ Confirmation */}
+                {/* Right Side: List Preview */}
                 <div className="flex-1 p-6 md:p-10 flex flex-col overflow-hidden">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                      {isAddingToReview 
-                        ? `รายการที่จะเพิ่มเข้าบิล: ${reviewBatch}` 
-                        : `รายการในบิลใหม่ (${items.length})`
-                      }
-                    </h3>
-                    {/* ถ้าเป็นโหมดเพิ่มเข้าบิลเดิม จะมีป้ายบอกสถานะเพิ่ม */}
-                    {isAddingToReview && (
-                      <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full uppercase italic">
-                        Mode: Add to Existing
-                      </span>
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">รายการที่จะส่ง ({items.length})</h3>
+                    {items.length > 0 && (
+                      <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">ล้างทั้งหมด</button>
                     )}
                   </div>
 
-                  {/* ส่วนแสดงรายการสินค้าที่คีย์เข้ามาแล้ว */}
-                  <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                    {(isAddingToReview 
-                      ? reviewItems.filter(i => i.isAddedByPurchase && !i.rowId) 
-                      : items
-                    ).map((item, i) => (
-                      <div 
-                        key={item.tempId || `item-${i}`} 
-                        className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between animate-in slide-in-from-right duration-300 shadow-sm"
-                      >
-                        <div className="flex items-center gap-4 overflow-hidden">
-                          <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-[10px] text-slate-400 shrink-0">
-                            {i + 1}
-                          </div>
-                          <div className="overflow-hidden">
-                            <h4 className="font-black text-slate-800 text-sm truncate uppercase">{item.name}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase truncate">
-                              ID: {item.id} | ยอด: {item.storeQty || 0}/{item.warehouseQty || 0}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <button 
-                          onClick={() => {
-                            if (isAddingToReview) {
-                              setReviewItems(reviewItems.filter(ri => ri.tempId !== item.tempId));
-                            } else {
-                              setItems(items.filter((_, idx) => idx !== i));
-                            }
-                          }} 
-                          className="w-8 h-8 rounded-lg bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0"
-                        >
-                          ✕
-                        </button>
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                    {items.length === 0 ? (
+                      <div className="h-full border-4 border-dashed border-slate-100 rounded-[40px] flex flex-col items-center justify-center p-10 opacity-30">
+                        <div className="text-6xl mb-4">📥</div>
+                        <p className="text-center font-black text-sm uppercase leading-relaxed">ยังไม่มีรายการสินค้า<br/>กรุณาเพิ่มข้อมูลด้านซ้ายครับ</p>
                       </div>
-                    ))}
-
-                    {/* กรณีไม่มีรายการ */}
-                    {(isAddingToReview 
-                      ? reviewItems.filter(i => i.isAddedByPurchase && !i.rowId).length 
-                      : items.length
-                    ) === 0 && (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-300 italic py-20">
-                        <p className="text-sm font-bold uppercase">ยังไม่มีรายการที่เพิ่ม</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ปุ่มยืนยันด้านล่าง */}
-                  <div className="pt-8 mt-4 border-t border-slate-100">
-                    {isAddingToReview ? (
-                      <button 
-                        type="button"
-                        onClick={closeModal}
-                        className="w-full py-7 rounded-[30px] font-black uppercase text-[13px] tracking-[0.3em] bg-slate-900 text-white hover:bg-blue-600 shadow-2xl transition-all active:scale-95"
-                      >
-                        ✅ ตรวจสอบยอดสั่งในหน้า Review
-                      </button>
                     ) : (
-                      <button 
-                        type="button"
-                        onClick={submitBatch} 
-                        disabled={items.length === 0 || !batchName || isSubmitting}
-                        className={`w-full py-7 rounded-[30px] font-black uppercase text-[13px] tracking-[0.3em] shadow-2xl transition-all active:scale-95 ${
-                          items.length > 0 && !isSubmitting 
-                          ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' 
-                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {isSubmitting ? 'กำลังส่งข้อมูล... ⏳' : '🚀 ส่งบิลตอนนี้'}
-                      </button>
+                      items.map((item, i) => (
+                        <div key={item.tempId} className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between animate-in slide-in-from-right duration-300">
+                          <div className="flex items-center gap-4 overflow-hidden">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center font-black text-xs text-slate-400 shrink-0">
+                              {i + 1}
+                            </div>
+                            <div className="overflow-hidden">
+                              <h4 className="font-black text-slate-800 text-sm truncate uppercase">{item.name}</h4>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase truncate">ID: {item.id} | ยอด: {item.storeQty}/{item.warehouseQty}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-10 h-10 rounded-xl bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0">✕</button>
+                        </div>
+                      ))
                     )}
+                  </div>
+
+                  <div className="pt-8">
+                    <button 
+                      onClick={submitBatch} 
+                      disabled={items.length === 0 || !batchName || isSubmitting}
+                      className={`w-full py-7 rounded-[30px] font-black uppercase text-[13px] tracking-[0.3em] shadow-2xl transition-all active:scale-95 ${items.length > 0 && !isSubmitting ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                      {isSubmitting ? 'กำลังส่งข้อมูล... ⏳' : '🚀 ส่งบิลตอนนี้'}
+                    </button>
                   </div>
                 </div>
-              </div>
-            </div>
+             </div>
           </div>
+        </div>
       )}
 
-      {/* Global Styles */}
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
