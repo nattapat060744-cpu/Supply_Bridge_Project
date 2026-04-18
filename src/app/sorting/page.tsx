@@ -868,7 +868,8 @@ const fetchStatus = async () => {
 
                             <div className="text-left">
                               <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>
-                                ชื่อรอบการสั่งซื้อ
+                                {/* ✅ ใส่เงื่อนไขให้โชว์วันที่ถ้ามีข้อมูล ถ้าไม่มีให้โชว์ข้อความปกติ */}
+                                {batchItems[0]?.createdAt ? `วันที่สั่งซื้อ: ${batchItems[0].createdAt}` : 'ชื่อรอบการสั่งซื้อ'}
                               </span>
                               <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">
                                 {batchItems[0]?.batchName || batchId}
