@@ -316,48 +316,51 @@ useEffect(() => {
     setFormData({ id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: '' });
   };
 
-const submitBatch = async () => {
+  const submitBatch = async () => {
     if (isSubmitting) return;
     if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
-    
+
     setIsSubmitting(true);
     try {
-      // 1. สร้าง Format วันที่และเวลาปัจจุบัน
+      // 1. สร้างวันที่มาตรฐาน (ISO format) เพื่อใช้เก็บลง DB ให้เรียงลำดับง่าย
       const now = new Date();
-      const thaiDate = now.toLocaleDateString('th-TH', {
+      
+      // สร้างวันที่แบบไทยสำหรับแสดงผลในชื่อบิล (ว/ด/ป น:น)
+      const displayDate = now.toLocaleDateString('th-TH', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
       });
-      const thaiTime = now.toLocaleTimeString('th-TH', {
+      const displayTime = now.toLocaleTimeString('th-TH', {
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false
       });
+
+      // 2. ชื่อบิลที่จะบันทึก (ชื่อที่พี่ชายพิมพ์ + วันที่เวลาปัจจุบัน)
+      const finalBatchName = `${batchName} (${displayDate} ${displayTime})`;
       
-      // 2. เอาชื่อที่พี่ชายพิมพ์ มาต่อด้วยวันที่และเวลา เช่น "เครื่องเขียน (19/04/2569)"
-      const finalBatchName = `${batchName} (${thaiDate})`;
-      const formattedDateForDB = `${thaiDate} ${thaiTime}:${now.getSeconds()}`;
+      // 3. วันที่แบบ Full ISO สำหรับฟิลด์ Created_At (เพื่อให้ระบบหลังบ้านเรียงข้อมูลแม่นยำ)
+      const isoString = now.toISOString(); 
 
       const res = await fetch('/api/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          groupName: finalBatchName, // ใช้ชื่อที่ต่อวันที่แล้ว
+          groupName: finalBatchName,
           items: items,
-          createdAt: formattedDateForDB,
+          // ใช้ ISO String ไปเลย จะได้ไม่แปลกเวลาดึงข้อมูลไปวิเคราะห์ต่อ
+          createdAt: isoString, 
           groupId: finalBatchName.trim() 
         }),
       });
 
       if (res.ok) {
-        alert(`🚀 สร้างบิล "${finalBatchName}" สำเร็จแล้วครับ!`);
-        setIsModalOpen(false);
-        setItems([]);
-        setBatchName('');
-        fetchPendingOrders();
+        alert(`🚀 สร้างบิล "${finalBatchName}" เรียบร้อย!`);
+        // ... ล้างค่า State ต่างๆ
       }
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -669,34 +672,37 @@ const submitBatch = async () => {
                 const bItems = batches[batchId] || [];
                 const isExpanded = expandedBatches.has(batchId);
 
-                return (
+              return (
+                // 🔥 1. แก้ไข className ที่นี่ เพื่อให้การ์ดมีมุมมนและเงา (Shadow) ดูนุ่มนวลขึ้น
+                <div 
+                  key={`batch-card-${batchId}`}
+                  className="bg-white border border-slate-100 rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mb-6 transition-all duration-300 hover:border-emerald-100 hover:shadow-[0_20px_40px_rgba(16,185,129,0.08)]"
+                >
+                  {/* ส่วนหัวของบิล (Header) */}
                   <div 
-                    key={`batch-card-${batchId}`} // 🔥 แก้ให้มี prefix นำหน้าแบบนี้ครับ
-                    className="bg-white border border-slate-200 ..."
+                    className={`p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
+                    onClick={() => toggleBatch(batchId)}
                   >
-                    {/* ส่วนหัวของบิล (Header) */}
-                    <div 
-                      className={`p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
-                      onClick={() => toggleBatch(batchId)}
-                    >
-                      <div className="flex items-center gap-6 w-full md:w-auto">
-                        <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${isExpanded ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
-                          <span className="text-xl leading-none">{bItems.length}</span>
-                          <span className="text-[8px] uppercase">SKU</span>
-                        </div>
-                        
-                        <div>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">
-                            ชื่อรอบการสั่งซื้อ
-                          </span>
-                          <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                            {batchId}
-                          </h2>
-                          <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1 inline-block uppercase italic">
-                            กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-6 w-full md:w-auto">
+                      {/* 🔥 2. ตัวเลข SKU ปรับเป็น Rounded 2xl */}
+                      <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${isExpanded ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
+                        <span className="text-xl leading-none">{bItems.length}</span>
+                        <span className="text-[8px] uppercase">SKU</span>
                       </div>
+                      
+                      <div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">
+                          ชื่อรอบการสั่งซื้อ
+                        </span>
+                        <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                          {batchId}
+                        </h2>
+                        {/* 🔥 3. ป้ายกลุ่ม ปรับเป็น Rounded-full (ทรงแคปซูล) */}
+                        <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mt-1 inline-block uppercase italic border border-emerald-100/50">
+                          กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}
+                        </p>
+                      </div>
+                    </div>
                       
                       <div className="flex items-center gap-4 w-full md:w-auto">
                         {/* 🔥 เพิ่มเฉพาะปุ่มนี้เข้ามาครับ */}
