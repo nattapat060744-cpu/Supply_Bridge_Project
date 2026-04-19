@@ -100,6 +100,8 @@ const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
 const [existingItems, setExistingItems] = useState<OrderItem[]>([]); // สำหรับโชว์เท่านั้น
 
+const [selectedBatch, setSelectedBatch] = useState<any>(null);
+
 const fetchPendingOrders = async (retries = 2) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -320,7 +322,7 @@ const submitBatch = async () => {
     
     setIsSubmitting(true);
     try {
-      // 🔥 แก้ไขจุดนี้: ใช้ Format วันที่ไทยแทน ISO String
+      // 1. สร้าง Format วันที่และเวลาปัจจุบัน
       const now = new Date();
       const thaiDate = now.toLocaleDateString('th-TH', {
         year: 'numeric',
@@ -330,24 +332,25 @@ const submitBatch = async () => {
       const thaiTime = now.toLocaleTimeString('th-TH', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit',
       });
       
-      const formattedDate = `${thaiDate} ${thaiTime}`; // จะได้ "19/04/2569 12:24:00"
+      // 2. เอาชื่อที่พี่ชายพิมพ์ มาต่อด้วยวันที่และเวลา เช่น "เครื่องเขียน (19/04/2569)"
+      const finalBatchName = `${batchName} (${thaiDate})`;
+      const formattedDateForDB = `${thaiDate} ${thaiTime}:${now.getSeconds()}`;
 
       const res = await fetch('/api/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          groupName: batchName, 
+          groupName: finalBatchName, // ใช้ชื่อที่ต่อวันที่แล้ว
           items: items,
-          createdAt: formattedDate, // 🔥 ส่งค่าที่อ่านง่ายไปแทน
-          groupId: batchName.trim() 
+          createdAt: formattedDateForDB,
+          groupId: finalBatchName.trim() 
         }),
       });
 
       if (res.ok) {
-        alert('🚀 ส่งบิลสั่งซื้อใหม่สำเร็จแล้วครับ!');
+        alert(`🚀 สร้างบิล "${finalBatchName}" สำเร็จแล้วครับ!`);
         setIsModalOpen(false);
         setItems([]);
         setBatchName('');
@@ -518,19 +521,24 @@ const submitBatch = async () => {
             </p>
           </div>
           <div className="flex gap-3 mt-8 md:mt-0">
-              <button 
-                onClick={() => {
-                  // 🔥 ล้างค่าเก่าทิ้งก่อนสร้างบิลใหม่
-                  setIsAddingMore(false);
-                  setTargetGroupId('');
-                  setBatchName('');
-                  setItems([]); 
-                  setIsModalOpen(true);
-                }}
-                className="bg-slate-900 text-white hover:bg-emerald-600 px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
-              >
-                <span className="text-xl">+</span> สร้างบิลใหม่
-              </button>
+            <button 
+              onClick={() => {
+                // 🔥 ล้างค่าทุกอย่างเพื่อเริ่มบิลใหม่จริงๆ
+                setIsAddingMore(false);
+                setTargetGroupId('');
+                setBatchName('');
+                setItems([]); 
+                
+                // เพิ่ม 2 บรรทัดนี้ครับพี่ชาย
+                setSelectedBatch(null);    // บอกระบบว่าไม่มีบิลเดิมที่เลือกอยู่ (โหมดสร้างใหม่)
+                setExistingItems([]);      // ล้างรายการสินค้าเก่าที่เคยดึงมาโชว์
+                
+                setIsModalOpen(true);
+              }}
+              className="bg-slate-900 text-white hover:bg-emerald-600 px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
+            >
+              <span className="text-xl">+</span> สร้างบิลใหม่
+            </button>
             <button 
               onClick={() => fetchPendingOrders()} 
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
@@ -709,7 +717,7 @@ const submitBatch = async () => {
                             }}
                             className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-6 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all border border-blue-100 shadow-sm active:scale-95"
                           >
-                            ➕ เพิ่มของ/แก้ไข
+                            ➕ เพิ่มรายการสินค้า
                           </button>
 
                         <button 
@@ -1139,40 +1147,62 @@ const submitBatch = async () => {
                 <div className="flex justify-between items-end mb-6 shrink-0">
                   <div>
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Basket Items</h3>
-                    <p className="text-2xl font-black text-slate-900">รายการสั่งซื้อในบิล <span className="text-blue-600">({items.length})</span></p>
+                    <p className="text-2xl font-black text-slate-900">รายการสั่งซื้อในบิล <span className="text-blue-600">({(existingItems?.length || 0) + items.length})</span></p>
                   </div>
                   {items.length > 0 && (
-                    <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-tighter hover:underline">Clear All</button>
+                    <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-tighter hover:underline">Clear New Items</button>
                   )}
                 </div>
 
                 {/* ส่วนแสดงรายการสินค้า - ให้เลื่อนเฉพาะตรงนี้ถ้าของเยอะ */}
                 <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                  {items.length === 0 ? (
+                  {(existingItems?.length === 0 && items.length === 0) ? (
                     <div className="h-full border-2 border-dashed border-slate-100 rounded-[3rem] flex flex-col items-center justify-center p-10 opacity-60">
                       <span className="text-4xl mb-3">🛍️</span>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ยังไม่มีสินค้าในบิลนี้</p>
                     </div>
                   ) : (
-                    items.map((item, i) => (
-                      <div key={item.tempId} className="bg-slate-50/70 p-4 rounded-2xl border border-slate-100 flex items-center justify-between group animate-in slide-in-from-right-4 duration-300">
-                        <div className="flex items-center gap-4 overflow-hidden">
-                          <div className="w-10 h-10 rounded-xl bg-white text-slate-900 border border-slate-200 flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
-                            {i + 1}
+                    <>
+                      {/* 1. รายการเดิมที่มีอยู่ (แก้ไขไม่ได้ - แสดงเป็นสีจาง) */}
+                      {existingItems?.map((item, i) => (
+                        <div key={`existing-${item.id || i}`} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between opacity-60 grayscale-[0.5]">
+                          <div className="flex items-center gap-4 overflow-hidden">
+                            <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-500 border border-slate-200 flex items-center justify-center font-black text-xs shrink-0">
+                              {i + 1}
+                            </div>
+                            <div className="overflow-hidden">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-slate-600 text-sm truncate uppercase tracking-tight">{item.name || item.Product_Name}</h4>
+                                <span className="text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">On Bill</span>
+                              </div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase">ID: {item.id || item.Product_ID} | รายการเดิมในระบบ</p>
+                            </div>
                           </div>
-                          <div className="overflow-hidden">
-                            <h4 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{item.name}</h4>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase">ID: {item.id} | Stock: {item.storeQty}/{item.warehouseQty}</p>
-                          </div>
+                          <div className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black text-slate-400 italic">LOCKED</div>
                         </div>
-                        <button 
-                          onClick={() => setItems(items.filter((_, idx) => idx !== i))} 
-                          className="w-8 h-8 rounded-lg bg-white text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))
+                      ))}
+
+                      {/* 2. รายการใหม่ที่กำลังเพิ่ม (แสดงสีปกติ - สามารถลบได้) */}
+                      {items.map((item, i) => (
+                        <div key={item.tempId || `new-${i}`} className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100 flex items-center justify-between group animate-in slide-in-from-right-4 duration-300">
+                          <div className="flex items-center gap-4 overflow-hidden">
+                            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-lg shadow-blue-100">
+                              {(existingItems?.length || 0) + i + 1}
+                            </div>
+                            <div className="overflow-hidden">
+                              <h4 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{item.name}</h4>
+                              <p className="text-[9px] font-bold text-blue-500 uppercase">ID: {item.id} | Stock: {item.storeQty}/{item.warehouseQty}</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setItems(items.filter((_, idx) => idx !== i))} 
+                            className="w-8 h-8 rounded-lg bg-white text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100 shadow-sm"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
 
@@ -1187,7 +1217,7 @@ const submitBatch = async () => {
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    {isSubmitting ? 'Processing...' : '🚀 ยืนยันคำสั่งซื้อ'}
+                    {isSubmitting ? 'Processing...' : '🚀 ยืนยันเพิ่มสินค้าลงบิล'}
                   </button>
                 </div>
               </div>
