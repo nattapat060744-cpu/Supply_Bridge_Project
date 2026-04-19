@@ -918,138 +918,161 @@ useEffect(() => {
         </div>
       )}
 
-      {/* --- New Batch Modal (Creating new batch) --- */}
+{/* --- New Batch Modal (Single Screen & Fixed Layout) --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-2 md:p-6">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col border border-white animate-in fade-in zoom-in-95 duration-300">
-             
-             {/* Header */}
-             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-                <div>
-                  <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">สร้างคำขอสั่งซื้อใหม่</p>
-                  <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900 italic">NEW PURCHASE <span className="text-emerald-600 not-italic">BATCH</span></h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-[110] p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25)] w-full max-w-7xl h-[85vh] flex flex-col border border-white/50 animate-in zoom-in-95 duration-500 overflow-hidden">
+            
+            {/* --- Header: ลด Padding ลงเพื่อเพิ่มพื้นที่ทำงาน --- */}
+            <div className="px-10 py-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+              <div className="flex items-center gap-5">
+                <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100">
+                  <span className="text-xl">📦</span>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
-                  <span className="text-2xl">✕</span>
-                </button>
-             </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+                    New Purchase <span className="text-emerald-500 italic">Order</span>
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">สร้างรายการจัดซื้อใหม่</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-100 text-slate-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+              >
+                ✕
+              </button>
+            </div>
 
-             {/* Content Area */}
-             <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-50/30">
-                
-                {/* Left Side: Form */}
-                <div className="w-full md:w-[45%] p-6 md:p-10 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                  <div className="space-y-8">
-                    {/* Step 1 */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black italic">01</span>
-                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">ชื่อรอบการสั่งซื้อ</h3>
-                      </div>
+            {/* --- Main Content Area: ล็อคความสูงไม่ให้เลื่อนทั้งหน้า --- */}
+            <div className="flex-1 flex overflow-hidden">
+              
+              {/* --- Left Side: Input Form (Fixed Area) --- */}
+              <div className="w-[42%] p-10 bg-slate-50/50 border-r border-slate-100 flex flex-col">
+                <div className="space-y-8">
+                  
+                  {/* Step 1: Batch Name - แถวยาวเต็มพื้นที่ด้านบน */}
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
+                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[9px]">01</span>
+                      ชื่อรอบการสั่งซื้อ (Batch Name)
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="ระบุชื่อรอบ เช่น: เครื่องเขียน ล็อตด่วน..." 
+                      className="w-full bg-white border border-slate-200 p-5 rounded-[1.5rem] font-bold outline-none focus:border-blue-500 focus:ring-4 ring-blue-500/5 transition-all text-lg shadow-sm"
+                      value={batchName}
+                      onChange={(e) => setBatchName(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Step 2: Product Input Grid */}
+                  <div className="space-y-3 bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1 mb-2">
+                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[9px]">02</span>
+                      รายละเอียดสินค้า
+                    </label>
+                    
+                    <div className="grid grid-cols-2 gap-3">
                       <input 
-                        type="text" 
-                        placeholder="เช่น เครื่องมือช่าง 06/03/2568" 
-                        className="w-full bg-white border border-slate-200 p-6 rounded-3xl font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all text-lg shadow-sm placeholder:text-slate-300"
-                        value={batchName}
-                        onChange={(e) => setBatchName(e.target.value)}
+                        type="text" placeholder="รหัสสินค้า" 
+                        className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition-all"
+                        value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})}
+                      />
+                      <input 
+                        type="text" placeholder="ชื่อสินค้า" 
+                        className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition-all"
+                        value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                      />
+                      <input 
+                        type="number" placeholder="สต็อกหน้าร้าน" 
+                        className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition-all"
+                        value={formData.storeQty} onChange={e => setFormData({...formData, storeQty: e.target.value})}
+                      />
+                      <input 
+                        type="number" placeholder="สต็อกคลัง" 
+                        className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition-all"
+                        value={formData.warehouseQty} onChange={e => setFormData({...formData, warehouseQty: e.target.value})}
                       />
                     </div>
-
-                    {/* Step 2 */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black italic">02</span>
-                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">เพิ่มรายการสินค้า</h3>
-                      </div>
-                      
-                      <form onSubmit={addItemToTempList} className="space-y-3 bg-white p-6 rounded-4xl border border-slate-200 shadow-sm">
-                        <div className="grid grid-cols-2 gap-3">
-                          <input 
-                            type="text" placeholder="รหัสสินค้า" 
-                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                            value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})}
-                          />
-                          <input 
-                            type="text" placeholder="ชื่อสินค้า" 
-                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                            value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                          />
-                          <input 
-                            type="number" placeholder="หน้าร้านมี..." 
-                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                            value={formData.storeQty} onChange={e => setFormData({...formData, storeQty: e.target.value})}
-                          />
-                          <input 
-                            type="number" placeholder="ในคลังมี..." 
-                            className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                            value={formData.warehouseQty} onChange={e => setFormData({...formData, warehouseQty: e.target.value})}
-                          />
-                        </div>
-                        <input 
-                          type="text" placeholder="ชื่อซัพพลายเออร์ (ถ้าทราบ)" 
-                          className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                          value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})}
-                        />
-                        <textarea 
-                          placeholder="หมายเหตุถึงฝ่ายจัดซื้อ..." 
-                          className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-24 resize-none"
-                          value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}
-                        />
-                        <button 
-                          type="submit"
-                          className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:bg-blue-600 transition-all active:scale-95"
-                        >
-                          + เพิ่มรายการนี้
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side: List Preview */}
-                <div className="flex-1 p-6 md:p-10 flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">รายการที่จะส่ง ({items.length})</h3>
-                    {items.length > 0 && (
-                      <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">ล้างทั้งหมด</button>
-                    )}
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                    {items.length === 0 ? (
-                      <div className="h-full border-4 border-dashed border-slate-100 rounded-[40px] flex flex-col items-center justify-center p-10 opacity-30">
-                        <div className="text-6xl mb-4">📥</div>
-                        <p className="text-center font-black text-sm uppercase leading-relaxed">ยังไม่มีรายการสินค้า<br/>กรุณาเพิ่มข้อมูลด้านซ้ายครับ</p>
-                      </div>
-                    ) : (
-                      items.map((item, i) => (
-                        <div key={item.tempId} className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between animate-in slide-in-from-right duration-300">
-                          <div className="flex items-center gap-4 overflow-hidden">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center font-black text-xs text-slate-400 shrink-0">
-                              {i + 1}
-                            </div>
-                            <div className="overflow-hidden">
-                              <h4 className="font-black text-slate-800 text-sm truncate uppercase">{item.name}</h4>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase truncate">ID: {item.id} | ยอด: {item.storeQty}/{item.warehouseQty}</p>
-                            </div>
-                          </div>
-                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-10 h-10 rounded-xl bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0">✕</button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="pt-8">
+                    <input 
+                      type="text" placeholder="ชื่อซัพพลายเออร์" 
+                      className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition-all"
+                      value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})}
+                    />
+                    <textarea 
+                      placeholder="หมายเหตุเพิ่มเติม..." 
+                      className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-blue-400 transition-all h-20 resize-none"
+                      value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}
+                    />
                     <button 
-                      onClick={submitBatch} 
-                      disabled={items.length === 0 || !batchName || isSubmitting}
-                      className={`w-full py-7 rounded-[30px] font-black uppercase text-[13px] tracking-[0.3em] shadow-2xl transition-all active:scale-95 ${items.length > 0 && !isSubmitting ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                      onClick={addItemToTempList}
+                      className="w-full bg-slate-900 text-white py-4 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-600 transition-all active:scale-95"
                     >
-                      {isSubmitting ? 'กำลังส่งข้อมูล... ⏳' : '🚀 ส่งบิลตอนนี้'}
+                      + เพิ่มลงรายการ
                     </button>
                   </div>
                 </div>
-             </div>
+              </div>
+
+              {/* --- Right Side: Preview List (Only this part scrolls if many items) --- */}
+              <div className="flex-1 flex flex-col p-10 bg-white overflow-hidden">
+                <div className="flex justify-between items-end mb-6 shrink-0">
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Basket Items</h3>
+                    <p className="text-2xl font-black text-slate-900">รายการสั่งซื้อในบิล <span className="text-blue-600">({items.length})</span></p>
+                  </div>
+                  {items.length > 0 && (
+                    <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-tighter hover:underline">Clear All</button>
+                  )}
+                </div>
+
+                {/* ส่วนแสดงรายการสินค้า - ให้เลื่อนเฉพาะตรงนี้ถ้าของเยอะ */}
+                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                  {items.length === 0 ? (
+                    <div className="h-full border-2 border-dashed border-slate-100 rounded-[3rem] flex flex-col items-center justify-center p-10 opacity-60">
+                      <span className="text-4xl mb-3">🛍️</span>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ยังไม่มีสินค้าในบิลนี้</p>
+                    </div>
+                  ) : (
+                    items.map((item, i) => (
+                      <div key={item.tempId} className="bg-slate-50/70 p-4 rounded-2xl border border-slate-100 flex items-center justify-between group animate-in slide-in-from-right-4 duration-300">
+                        <div className="flex items-center gap-4 overflow-hidden">
+                          <div className="w-10 h-10 rounded-xl bg-white text-slate-900 border border-slate-200 flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
+                            {i + 1}
+                          </div>
+                          <div className="overflow-hidden">
+                            <h4 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{item.name}</h4>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">ID: {item.id} | Stock: {item.storeQty}/{item.warehouseQty}</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setItems(items.filter((_, idx) => idx !== i))} 
+                          className="w-8 h-8 rounded-lg bg-white text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Submit Section: ล็อคไว้ด้านล่างเสมอ */}
+                <div className="pt-8 shrink-0">
+                  <button 
+                    onClick={submitBatch} 
+                    disabled={items.length === 0 || !batchName || isSubmitting}
+                    className={`w-full py-7 rounded-[2rem] font-black uppercase text-xs tracking-[0.4em] shadow-xl transition-all active:scale-[0.98] ${
+                      items.length > 0 && !isSubmitting 
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-200' 
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isSubmitting ? 'Processing...' : '🚀 ยืนยันคำสั่งซื้อ'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
