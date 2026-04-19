@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-// อินเตอร์เฟซสำหรับรายการสินค้า (คงเดิมตามที่ส่งมา)
 interface OrderItem {
   tempId?: number;
   id: string;
@@ -27,7 +26,7 @@ interface OrderItem {
   Recv_Qty?: string | number;
   Recv_Qty_Unit?: string;
   Note_Stock?: string;
-  Recv_Date?: string; // เพิ่มฟิลด์วันที่รับของ
+  Recv_Date?: string; 
 }
 
 interface Notification {
@@ -46,11 +45,9 @@ const parseThaiDate = (rawDate: string | number | Date) => {
   if (rawDate instanceof Date) {
     date = rawDate;
   } else if (typeof rawDate === 'string') {
-    // แยกวันที่และเวลาจาก "17/4/2569 5:45:56"
     const [datePart, timePart] = rawDate.split(' ');
     const [d, m, y] = datePart.split('/').map(Number);
     
-    // แปลง พ.ศ. เป็น ค.ศ.
     const yearAD = y > 2500 ? y - 543 : y;
     
     if (timePart) {
@@ -63,8 +60,6 @@ const parseThaiDate = (rawDate: string | number | Date) => {
     date = new Date(rawDate);
   }
 
-  // 🔥 ส่วนที่เพิ่มเข้าไป: ถ้าเวลาที่ได้มาเป็น UTC (ช้ากว่าไทย 7 ชม.) 
-  // ให้บวกเพิ่ม 7 ชั่วโมง เพื่อให้ตรงกับเวลาจริงในไทย
   if (!isNaN(date.getTime())) {
     date.setHours(date.getHours() + 7);
   }
@@ -79,21 +74,17 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
 
-  // --- 1. หัวเอกสาร (สร้างให้ดูเด่น) ---
   worksheet.mergeCells('A1:L1');
   const titleCell = worksheet.getCell('A1');
   titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
-  titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } }; // เขียวเข้ม
+  titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } };
   titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
   worksheet.getRow(1).height = 35;
 
-  // --- 2. โครงสร้างหัวตาราง 2 ชั้น (ตามไฟล์ตัวอย่างเป๊ะๆ) ---
-  // Merge เซลล์สำหรับหัวที่ไม่มีตัวย่อย
   const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L'];
   mergedCols.forEach(col => worksheet.mergeCells(`${col}2:${col}3`));
-  worksheet.mergeCells('G2:J2'); // Merge "จำนวนที่สั่งซื้อ" ครอบ 4 ช่อง
+  worksheet.mergeCells('G2:J2');
 
-  // ใส่ค่าหัวตาราง
   const h = {
     A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
     D2: 'สินค้าในล็อก', E2: 'สต็อก', F2: 'ว/ดป สั่งซื้อ',
@@ -102,12 +93,11 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
   };
   Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
 
-  // --- 3. แต่งสีหัวตาราง (ให้ดูสวยและเคลียร์) ---
   [2, 3].forEach(rowNum => {
     const row = worksheet.getRow(rowNum);
     row.height = 25;
     row.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อนๆ สบายตา
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อน
       cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
@@ -119,7 +109,6 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
     });
   });
 
-  // --- 4. ใส่ข้อมูลสินค้า + ทำแถวสีสลับ (Striped Rows) ---
   batchItems.forEach((item, index) => {
     const row = worksheet.addRow([
       item.id,
@@ -136,11 +125,10 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
       item.note || '-'
     ]);
 
-    row.height = 22; // เพิ่มความสูงแถวให้ไม่เบียด
+    row.height = 22;
     const isEven = index % 2 === 0;
 
     row.eachCell((cell, colNumber) => {
-      // ทำแถวสีสลับ
       if (!isEven) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
       }
@@ -153,14 +141,12 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
         right: { style: 'thin', color: { argb: 'FFEEEEEE' } }
       };
 
-      // ชื่อสินค้า (คอลัมน์ 2) ให้ชิดซ้ายและมีระยะห่างขอบ
       if (colNumber === 2) {
         cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
       }
     });
   });
 
-  // --- 5. ปรับความกว้างคอลัมน์ให้อ่านง่าย ---
   worksheet.columns = [
     { width: 18 }, // รหัส
     { width: 45 }, // ชื่อสินค้า (กว้างพิเศษ)
@@ -176,7 +162,6 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
     { width: 20 }  // หมายเหตุเรียง
   ];
 
-  // --- 6. สร้างไฟล์และดาวน์โหลด ---
   const buffer = await workbook.xlsx.writeBuffer();
   saveAs(new Blob([buffer]), `ใบขอสั่งซื้อ_${batchItems[0].batchName || 'ไม่มีชื่อบิล'}.xlsx`);
 };
@@ -217,22 +202,20 @@ export default function SortingPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Logic ส่วนเดิมทั้งหมด
 const allFilteredBatchIds = useMemo(() => {
   const now = new Date().getTime();
   const oneDayInMs = 24 * 60 * 60 * 1000;
 
-  // 1. Filter ข้อมูล (คงเดิม)
   const filtered = Object.keys(activeBatches).filter(batchId => {
     const batchItems = activeBatches[batchId];
     if (!batchItems || batchItems.length === 0) return false;
 
-    const allDone = batchItems.every(i => i.status === 'COMPLETED');
+    /*const allDone = batchItems.every(i => i.status === 'COMPLETED');
     if (allDone) {
       const itemDate = batchItems[0]?.createdAt;
       const lastUpdate = parseThaiDate(itemDate || "").getTime();
       if (now - lastUpdate > oneDayInMs) return false;
-    }
+    }*/
 
     if (!searchTerm.trim()) return true;
     const s = searchTerm.toLowerCase();
@@ -245,7 +228,6 @@ const allFilteredBatchIds = useMemo(() => {
     return matchBatchName || matchItems;
   });
 
-  // 2. 🔥 Sort ใหม่ล่าสุด (Index 0) ไปเก่า เพื่อให้บิลใหม่ขึ้นหน้า 1
   return filtered.sort((a, b) => {
     const timeA = parseThaiDate(activeBatches[a][0]?.createdAt || "").getTime();
     const timeB = parseThaiDate(activeBatches[b][0]?.createdAt || "").getTime();
@@ -255,37 +237,28 @@ const allFilteredBatchIds = useMemo(() => {
 }, [activeBatches, searchTerm]);
 
  useEffect(() => {
-  // 1. หา Batch ID ล่าสุดที่มีการแจ้งเตือน
   const latestBatchId = notifications.length > 0 ? notifications[notifications.length - 1].batchId : null;
 
-  // 2. เช็คเงื่อนไข:
-  // - ต้องมี ID ล่าสุด
-  // - ID นั้นต้อง 'ไม่ตรง' กับที่เราเพิ่งเลื่อนไป (ป้องกันการเลื่อนซ้ำ)
   if (latestBatchId && hasAutoScrolled.current !== latestBatchId) {
     
-    // ลองหา Element ในหน้าปัจจุบัน
+
     const element = document.getElementById(`batch-${latestBatchId}`);
     
     if (element) {
-      // สั่งเลื่อน
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
-      // ✅ บันทึกไว้ว่าเลื่อนไปบิลนี้แล้วนะ
       hasAutoScrolled.current = latestBatchId;
       
       console.log("Auto scrolled to:", latestBatchId);
     }
   }
 
-  // 3. ถ้าไม่มี Notification เหลืออยู่เลย (กดรับทราบหมดแล้ว) 
-  // ให้ล้างค่าใน Ref เพื่อให้ครั้งหน้าถ้ามีบิลเดิมอัปเดตใหม่ มันจะยอมเลื่อนอีกครั้ง
   if (notifications.length === 0) {
     hasAutoScrolled.current = null;
   }
 
-}, [notifications, currentPage]); // เพิ่ม currentPage เข้าไปด้วยเพื่อให้มันเช็คใหม่ตอนเปลี่ยนหน้า
+}, [notifications, currentPage]); 
 
-  // ค้นหารายการที่มีปัญหาเพื่อแสดงใน Issue Tracking
   const discrepancyItems = useMemo(() => {
     const allItems: OrderItem[] = Object.values(activeBatches).flat();
     return allItems.filter((item) => {
@@ -306,7 +279,6 @@ const allFilteredBatchIds = useMemo(() => {
   }, [activeBatches]);
 
   const stats = useMemo(() => {
-      // ใช้ list ที่ผ่านการกรองวันมาแล้ว
       const total = allFilteredBatchIds.length; 
       const ordered = allFilteredBatchIds.filter(bid => {
         const batchItems = activeBatches[bid];
@@ -323,14 +295,11 @@ const allFilteredBatchIds = useMemo(() => {
 
   const clearBatchNotifications = (batchId: string) => {
   setNotifications(prev => prev.filter(n => n.batchId !== batchId));
-  // พอ notifications เปลี่ยนแปลง useEffect ด้านบนจะเช็ค notifications.length === 0 เอง
       
-      // 1. ดึงรายการที่เคยปิดจากเครื่องมา แล้วเพิ่ม ID นี้เข้าไป
       const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
       dismissed[batchId] = true; 
       localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
 
-      // 2. จดจำ Snapshot ปัจจุบันไว้ว่าตอนปิด ข้อมูลมันเป็นยังไง
       const currentSnapshot = JSON.stringify(activeBatches[batchId] || []);
       localStorage.setItem(`snapshot_${batchId}`, currentSnapshot);
 
@@ -363,7 +332,7 @@ const allFilteredBatchIds = useMemo(() => {
       const batchUpdates: { [key: string]: { count: number; batchName: string, items: any[] } } = {};
       let hasSnapshotChange = false;
 
-      // 1. จัดกลุ่มข้อมูล
+
       newData.forEach(item => {
         if (!item.batchId) return;
         if (!batchUpdates[item.batchId]) {
@@ -372,16 +341,14 @@ const allFilteredBatchIds = useMemo(() => {
         batchUpdates[item.batchId].items.push(item);
       });
 
-      // ดึงสถานะที่เคยปิดไว้จาก localStorage
       const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
 
       Object.entries(batchUpdates).forEach(([bid, info]) => {
         const currentBatchString = JSON.stringify(info.items);
         const lastSnapshot = localStorage.getItem(`snapshot_${bid}`);
 
-        // ถ้าข้อมูล "เหมือนเป๊ะ" กับที่เคยปิดไป -> เงียบไว้
         if (lastSnapshot === currentBatchString && dismissed[bid]) {
-          return; // จบการทำงาน ไม่มีการสร้าง Alert
+          return; 
         }
 
         let changeCount = 0;
@@ -401,7 +368,6 @@ const allFilteredBatchIds = useMemo(() => {
           }
         });
 
-        // ถ้ามีการเปลี่ยนจริง และยังไม่ถูกสั่งปิดในรอบนี้
         if (changeCount > 0 && !dismissed[bid]) {
           const isAlreadyShowing = notifications.some(n => n.batchId === bid);
           if (!isAlreadyShowing) {
@@ -415,11 +381,9 @@ const allFilteredBatchIds = useMemo(() => {
 
             if (audioRef.current) audioRef.current.play().catch(() => {});
             
-            // อัปเดต Snapshot ล่าสุด
             localStorage.setItem(`snapshot_${bid}`, currentBatchString);
           }
         } else if (changeCount > 0 && dismissed[bid]) {
-          // **สำคัญ** ถ้ามีการแก้เลขใหม่หลังจากที่พี่ปิดไปแล้ว ให้ปลดล็อกเพื่อให้เตือนใหม่
           delete dismissed[bid];
           localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
         }
@@ -438,16 +402,14 @@ const fetchStatus = async () => {
       
       const rawData = await res.json();
 
-      // 1. เรียงลำดับตามวันที่สร้าง (Created_At) ล่าสุดขึ้นก่อนเสมอ
       const sortedData = Array.isArray(rawData) 
         ? [...rawData].sort((a: any, b: any) => {
             const dateA = new Date(a.Created_At || 0).getTime();
             const dateB = new Date(b.Created_At || 0).getTime();
-            return dateB - dateA; // เอาเวลาใหม่ล่าสุดไว้บนสุด
+            return dateB - dateA;
           }) 
         : [];
 
-      // 2. Mapping ข้อมูลให้ตรงตาม OrderItem
       const normalizedData: OrderItem[] = sortedData.map((item: any) => ({
         ...item,
         id: (item.id || item.Product_ID || '').toString(),
@@ -475,7 +437,6 @@ const fetchStatus = async () => {
 
       trackChanges(normalizedData);
 
-      // 3. จัดกลุ่มบิล (บิลใหม่จะกลายเป็นกลุ่มแรกใน Object)
       const grouped = normalizedData.reduce((acc: any, item: OrderItem) => {
         const key = item.batchId || 'no-batch';
         if (!acc[key]) acc[key] = [];
@@ -485,9 +446,6 @@ const fetchStatus = async () => {
 
       setActiveBatches(grouped);
       
-      // ✅ 4. รีเซ็ตหน้ากลับมาที่หน้า 1 เมื่อข้อมูลอัปเดต (ถ้าพี่มีตัวแปร setCurrentPage)
-      //setCurrentPage(1); 
-
     } catch (err) {
       console.error("❌ Fetch status error:", err);
     }
@@ -498,7 +456,6 @@ const fetchStatus = async () => {
   const currentBatchIds = allFilteredBatchIds.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(allFilteredBatchIds.length / itemsPerPage);
 
-  // ฟังก์ชันช่วยจัดกลุ่มข้อมูลตามวันที่ (YYYY-MM-DD)
   const groupedByDate = useMemo(() => {
       const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
       
@@ -506,7 +463,6 @@ const fetchStatus = async () => {
         const items = activeBatches[batchId];
         if (!items || items.length === 0) return;
 
-        // ✅ เรียกใช้ parseThaiDate ที่เราย้ายไปไว้ข้างบนแล้ว
         const dateVal = items[0]?.createdAt || items[0]?.Recv_Date || "";
         const d = parseThaiDate(dateVal);
 
@@ -525,7 +481,6 @@ const fetchStatus = async () => {
       return groups;
     }, [currentBatchIds, activeBatches]);
 
-  // แก้ไข: เพิ่มการเช็คสิทธิ์ SORTING ก่อนดึงข้อมูล
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       if (typeof window === 'undefined') return;
@@ -534,24 +489,19 @@ const fetchStatus = async () => {
       const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่จากเครื่องมา
       const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
 
-      // 1. ดักจับถ้าไม่ได้ Login หรือ "วันที่ไม่ตรงกับวันนี้" (ข้ามวัน)
       if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
-        // ถ้าข้ามวัน ไม่ต้อง Alert ซ้ำก็ได้ครับ ให้ดีดกลับหน้า Login เงียบๆ 
-        // เพราะ Navbar จะเป็นคน Alert บอกเองอยู่แล้ว
         router.push('/');
         return;
       }
 
       try {
         const savedUser = JSON.parse(savedUserStr);
-        // 2. เช็คสิทธิ์แผนก (คงเดิม)
         if (!savedUser.name || (savedUser.department !== 'SORTING' && savedUser.department !== 'ADMIN')) {
           alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
           router.push('/');
           return;
         }
 
-        // 3. ถ้าผ่านเงื่อนไข ค่อยโหลดข้อมูล
         await fetchStatus(); 
       } catch (e) {
         console.error("Auth Error:", e);
@@ -563,16 +513,13 @@ const fetchStatus = async () => {
   }, [router]);
 
   useEffect(() => {
-      // 1. โหลด Snapshot เก่าจากเครื่องก่อน
       const savedSnapshot = localStorage.getItem('sampeng_snapshot_live');
       if (savedSnapshot) {
         previousDataRef.current = JSON.parse(savedSnapshot);
       }
       
-      // 2. ตั้งค่าเสียง
       audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       
-      // 3. เริ่มวงจรการดึงข้อมูล (เอา fetchStatus() ตัวบนออก ให้เหลือแค่ใน Interval พอ)
       const interval = setInterval(fetchStatus, 30000);
       return () => clearInterval(interval);
     }, []);
@@ -596,11 +543,9 @@ const submitBatch = async () => {
     
     setIsSubmitting(true);
 
-    // --- ส่วนที่เพิ่ม: สร้างวันที่ปัจจุบัน (พ.ศ.) เพื่อต่อท้ายชื่อบิล ---
     const now = new Date();
     const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear() + 543}`;
     
-    // รวมชื่อที่พิมพ์เข้ากับวันที่ เช่น "รอบเช้า" -> "รอบเช้า (18/04/2569)"
     const finalBatchName = `${batchName.trim()} (${dateStr})`;
     const customGroupId = finalBatchName; 
 
@@ -610,7 +555,7 @@ const submitBatch = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           groupId: customGroupId,
-          groupName: finalBatchName, // ส่งชื่อที่มีวันที่ต่อท้ายไปด้วย
+          groupName: finalBatchName,
           items: items.map(it => ({
             productId: it.id,
             productName: it.name,
@@ -826,7 +771,6 @@ const submitBatch = async () => {
 
                     const isExpanded = expandedBatches[batchId];
 
-                    // ✅ 1. คำนวณสถานะแบบเดียวกับ Timeline เป๊ะๆ
                     const isStep2Active = batchItems.some((i: OrderItem) => 
                       i.status !== 'PENDING' && (Number(i.orderCarton) > 0 || Number(i.qtyPerCarton) > 0)
                     );
@@ -837,7 +781,6 @@ const submitBatch = async () => {
                     );
                     const isStep4Active = batchItems.length > 0 && batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
 
-                    // ✅ 2. เลือก Icon และสีให้ตรงกับสถานะล่าสุดที่ไปถึง
                     let currentIcon = '🛒';
                     let statusBgColor = 'bg-blue-500';
 
@@ -846,7 +789,7 @@ const submitBatch = async () => {
                     } else if (isStep3Active) {
                       currentIcon = '🚚';
                     } else if (isStep2Active) {
-                      currentIcon = '🛒'; // จุดนี้ถ้าพี่อยากเปลี่ยนเป็นไอคอนอื่นที่สื่อถึง "สั่งแล้ว" ก็ได้ครับ
+                      currentIcon = '🛒';
                     }
 
                     const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));

@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 
 export const revalidate = 0;
 
-// --- ฟังก์ชันดึงข้อมูล (GET) ---
 export async function GET() {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) {
@@ -65,6 +64,7 @@ export async function GET() {
         innerUnit: r.get('Inner_Unit') || 'ชิ้น',
         notePur: r.get('Note_Purchase') || '',
         Note_Request: r.get('Note_Request') || '',
+        Created_At: r.get('Created_At') || '',
       }));
 
     return NextResponse.json(allItems);
@@ -73,13 +73,10 @@ export async function GET() {
   }
 }
 
-// --- ฟังก์ชันสร้างบิลใหม่ (POST) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // 1. ดักรับทั้ง batchName (จากที่พี่ส่ง) และ groupName (เผื่อไว้)
-    // 2. ดึง items ออกมา
     const { items, batchName, groupName, groupId: incomingGroupId } = body;
 
     const auth = new JWT({
@@ -92,11 +89,9 @@ export async function POST(req: Request) {
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
 
-    // สร้าง ID กลุ่ม (ถ้าหน้าบ้านไม่ส่งมา ให้ใช้ Poo- ตามที่พี่ตั้งไว้)
     const groupId = incomingGroupId || `จัดซื้อสั่งของ-${Date.now()}`;
-    const createdAt = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+    const createdAt = new Date().toISOString();
 
-    // วนลูปใช้ addRow
     for (const item of items) {
       await sheet.addRow({
         'Group_ID': groupId,
@@ -129,7 +124,6 @@ export async function POST(req: Request) {
   }
 }
 
-// --- ฟังก์ชันอัปเดตข้อมูลเดิม (PATCH) ---
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();

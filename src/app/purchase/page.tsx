@@ -2,7 +2,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-// อินเตอร์เฟซสำหรับรายการสินค้า
 interface OrderItem {
   id: string;
   productId?: string;
@@ -31,12 +30,12 @@ interface OrderItem {
   recvCarton?: string;
   Recv_Qty?: string;
   rowId?: string;
-  // ฟิลด์เพิ่มเติมสำหรับระบบสร้างบิลใหม่
   tempId?: number;
   storeQty?: string;
   note?: string;
-  Recv_Date?: string; // เพิ่มฟิลด์วันที่รับของ
-   notePur ?: string; // หมายเหตุจากจัดซื้อ
+  Recv_Date?: string;
+  notePur ?: string;
+  Created_At?: string;
 }
 
 interface Notification {
@@ -58,17 +57,14 @@ export default function PurchasePage() {
   const [reviewBatch, setReviewBatch] = useState<string | null>(null);
   const [reviewItems, setReviewItems] = useState<OrderItem[]>([]);
 
-  // ระบบสร้างบิลใหม่ (New Batch)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
   const [formData, setFormData] = useState({ id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: '' });
 
-  // ระบบ Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // ระบบ Notification
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
   const [rawData, setRawData] = useState<OrderItem[]>([]);
@@ -97,6 +93,8 @@ export default function PurchasePage() {
     });
   }, [rawData]);
 
+const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
 const fetchPendingOrders = async (retries = 2) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -112,12 +110,11 @@ const fetchPendingOrders = async (retries = 2) => {
       const data = await res.json();
       setRawData(data);
 
-      // ✅ แก้จุดนี้: เรียงข้อมูลจากใหม่ไปเก่า (Created_At)
       const sortedData = Array.isArray(data) 
         ? [...data].sort((a: any, b: any) => {
             const dateA = new Date(a.Created_At || a.createdAt || 0).getTime();
             const dateB = new Date(b.Created_At || b.createdAt || 0).getTime();
-            return dateB - dateA; // ใหม่ล่าสุดอยู่บนสุด
+            return dateB - dateA;
           }) 
         : [];
 
@@ -132,8 +129,7 @@ const fetchPendingOrders = async (retries = 2) => {
 
       setBatches(grouped);
       
-      // ✅ เพิ่มบรรทัดนี้: ให้กลับไปหน้า 1 เสมอเมื่อโหลดข้อมูลใหม่
-      setCurrentPage(1); 
+      //setCurrentPage(1); 
 
     } catch (err: any) {
       if (retries > 0 && err.name !== 'AbortError') {
@@ -154,7 +150,15 @@ const fetchPendingOrders = async (retries = 2) => {
   }, []);
 
   const toggleBatch = (batchId: string) => {
-    setOpenBatches((prev: any) => ({ ...prev, [batchId]: !prev[batchId] }));
+    setExpandedBatches((prev) => {
+      const next = new Set(prev);
+      if (next.has(batchId)) {
+        next.delete(batchId);
+      } else {
+        next.add(batchId);
+      }
+      return next;
+    });
   };
 
 useEffect(() => {
@@ -165,24 +169,19 @@ useEffect(() => {
       const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่จากเครื่องมา
       const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
 
-      // 1. ดักจับถ้าไม่ได้ Login หรือ "วันที่ไม่ตรงกับวันนี้" (ข้ามวัน)
       if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
-        // ถ้าข้ามวัน ไม่ต้อง Alert ซ้ำก็ได้ครับ ให้ดีดกลับหน้า Login เงียบๆ 
-        // เพราะ Navbar จะเป็นคน Alert บอกเองอยู่แล้ว
         router.push('/');
         return;
       }
 
       try {
         const savedUser = JSON.parse(savedUserStr);
-        // 2. เช็คสิทธิ์แผนก (คงเดิม)
         if (!savedUser.name || (savedUser.department !== 'PURCHASE' && savedUser.department !== 'ADMIN')) {
           alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
           router.push('/');
           return;
         }
 
-        // 3. ถ้าผ่านเงื่อนไข ค่อยโหลดข้อมูล
         await fetchPendingOrders(); 
       } catch (e) {
         console.error("Auth Error:", e);
@@ -195,7 +194,7 @@ useEffect(() => {
 
   const handleOpenReview = (batchId: string) => {
     const itemsForReview = batches[batchId].map((item: any) => ({
-      ...item, // ✅ กระจายข้อมูลเดิมทั้งหมดออกมาก่อน
+      ...item, 
       id: (item.id || item.Product_ID || item.rowId || '').toString(),
       name: item.name || item.Product_Name || 'ไม่มีชื่อสินค้า',
       supplier: item.supplier || item.Supplier || '-',
@@ -249,7 +248,25 @@ useEffect(() => {
     }
   };
 
-  // ฟังก์ชันสำหรับระบบสร้างบิลใหม่
+  const parseThaiDate = (dateStr: string) => {
+    if (!dateStr) return 0;
+    
+    if (dateStr.includes('T') && dateStr.includes('Z')) {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+
+    try {
+      const [datePart] = dateStr.split(' ');
+      const [day, month, year] = datePart.split('/').map(Number);
+      const adjustedYear = year > 2500 ? year - 543 : year;
+      const d = new Date(adjustedYear, month - 1, day);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    } catch {
+      return 0;
+    }
+  };
+
   const addItemToTempList = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id || !formData.name) return alert('กรุณาระบุรหัสและชื่อสินค้าครับ');
@@ -269,33 +286,37 @@ useEffect(() => {
   };
 
   const submitBatch = async () => {
-    if (isSubmitting) return;
-    if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
-    
-  setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          groupName: batchName, // เปลี่ยนจาก batchName เป็น groupName ให้ตรงกับ API
-          items: items,
-          groupId: `จัดซื้อสั่งของ-${Date.now()}` // ส่ง ID กลุ่มไปให้ API ด้วย
-        }),
-      });
-      if (res.ok) {
-        alert('🚀 ส่งบิลสั่งซื้อใหม่สำเร็จแล้วครับ!');
-        setIsModalOpen(false);
-        setItems([]);
-        setBatchName('');
-        fetchPendingOrders();
+      if (isSubmitting) return;
+      if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+      
+      setIsSubmitting(true);
+      try {
+        const now = new Date().toISOString();
+
+        const res = await fetch('/api/purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            groupName: batchName, 
+            items: items,
+            createdAt: now,
+            groupId: `จัดซื้อสั่งของ-${Date.now()}` 
+          }),
+        });
+
+        if (res.ok) {
+          alert('🚀 ส่งบิลสั่งซื้อใหม่สำเร็จแล้วครับ!');
+          setIsModalOpen(false);
+          setItems([]);
+          setBatchName('');
+          fetchPendingOrders();
+        }
+      } catch (err) {
+        alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (err) {
-      alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    };
 
   const autoFillOrderQty = () => {
     const newItems = reviewItems.map(item => ({
@@ -307,19 +328,70 @@ useEffect(() => {
   };
   
   const filteredBatchKeys = useMemo(() => {
-      const s = searchTerm.toLowerCase();
-      
-      return Object.keys(batches).filter(key => {
-        const matchBatchName = key.toLowerCase().includes(s);
-        const matchItems = batches[key].some((i: OrderItem) => {
-          const pId = (i.productId || i.Product_ID || i.productID || '').toString().toLowerCase();
-          const pName = (i.name || i.Product_Name || i.productName || '').toLowerCase();
-          const pSup = (i.supplier || i.Supplier || '').toLowerCase();
-          return pId.includes(s) || pName.includes(s) || pSup.includes(s);
-        });
-        return matchBatchName || matchItems;
-      }); // ✅ ลบ .reverse() ตรงนี้ออกครับพี่ชาย
+      const keys = Object.keys(batches).filter(batchId => {
+        const bItems = batches[batchId];
+        return bItems.some(item =>
+          item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          batchId.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      });
+
+      return keys.sort((a, b) => {
+        const dateA = parseThaiDate(batches[a][0]?.Created_At || "");
+        const dateB = parseThaiDate(batches[b][0]?.Created_At || "");
+        
+        if (dateB === dateA) {
+          return b.localeCompare(a); 
+        }
+        return dateB - dateA; 
+      });
     }, [batches, searchTerm]);
+
+  const groupedByDate = useMemo(() => {
+      const groups: { [key: string]: string[] } = {};
+
+      const indexOfLastItem = currentPage * itemsPerPage;
+      const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+      const currentItemsInPage = filteredBatchKeys.slice(indexOfFirstItem, indexOfLastItem);
+
+      currentItemsInPage.forEach(batchId => {
+        const bItems = batches[batchId];
+        const rawDate = bItems[0]?.Created_At;
+
+        if (!rawDate) {
+          if (!groups['ไม่มีวันที่']) groups['ไม่มีวันที่'] = [];
+          groups['ไม่มีวันที่'].push(batchId);
+          return;
+        }
+
+        try {
+          let d: Date;
+          if (typeof rawDate === 'string' && rawDate.includes('/')) {
+            const parts = rawDate.split(' ');
+            const dateParts = parts[0].split('/');
+            let year = parseInt(dateParts[2]);
+            if (year > 2500) year -= 543;
+            d = new Date(year, parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
+          } else {
+            d = new Date(rawDate);
+          }
+
+          const datePart = d.toLocaleDateString('th-TH', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+
+          if (!groups[datePart]) groups[datePart] = [];
+          groups[datePart].push(batchId);
+        } catch (e) {
+          if (!groups['รูปแบบวันที่ไม่ถูกต้อง']) groups['รูปแบบวันที่ไม่ถูกต้อง'] = [];
+          groups['รูปแบบวันที่ไม่ถูกต้อง'].push(batchId);
+        }
+      });
+
+      return groups;
+    }, [filteredBatchKeys, batches, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredBatchKeys.length / itemsPerPage);
   const currentBatches = filteredBatchKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -476,146 +548,152 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* --- รายการบิลสินค้า --- */}
-<div className="space-y-4">
-          {currentBatches.map(batchId => {
-            // ใช้ตัวแปรให้ตรงกับ State ที่พี่ชายมีในหน้า Purchase
-            const bItems = batches[batchId];
-            const isExpanded = !!openBatches[batchId];
-
-            return (
-              <div 
-                key={batchId} 
-                className="bg-white border border-slate-200 rounded-4xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md"
-              >
-                {/* ส่วนหัวของบิล (Header) */}
-                <div 
-                  className={`p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
-                  onClick={() => toggleBatch(batchId)}
-                >
-                  <div className="flex items-center gap-6 w-full md:w-auto">
-                    {/* วงกลมจำนวน SKU */}
-                    <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${isExpanded ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
-                      <span className="text-xl leading-none">{bItems.length}</span>
-                      <span className="text-[8px] uppercase">SKU</span>
-                    </div>
-                    
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">
-                        ชื่อรอบการสั่งซื้อ
-                      </span>
-                      <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                        {batchId}
-                      </h2>
-                      {/* ชื่อกลุ่ม */}
-                      <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1 inline-block uppercase italic">
-                        กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 w-full md:w-auto">
-                    <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        handleOpenReview(batchId); // ใช้ฟังก์ชันเดิมของพี่ชาย
-                      }}
-                      className="flex-1 md:flex-none bg-emerald-600 text-white hover:bg-slate-900 px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md active:scale-95 border-b-4 border-emerald-800"
-                    >
-                      📝 จัดการใบสั่งซื้อ
-                    </button>
-                    
-                    <div className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180 text-emerald-600' : 'text-slate-300'}`}>
-                      ▼
-                    </div>
-                  </div>
+{/* --- รายการบิลสินค้า --- */}
+        <div className="space-y-10">
+          {Object.entries(groupedByDate).map(([dateLabel, batchIds]) => (
+            <div key={dateLabel} className="space-y-6">
+              
+              {/* --- ส่วนหัวข้อวันที่ (Date Header) --- */}
+              <div className="flex items-center gap-4 py-4">
+                <div className="h-px flex-1 bg-slate-200"></div>
+                <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
+                  <span className="text-lg">📅</span>
+                  <span className="text-sm font-black text-slate-600 uppercase tracking-tight">
+                    รายการของวันที่: {dateLabel}
+                  </span>
                 </div>
-
-                {/* ส่วนแสดงรายการสินค้าด้านใน (Expansion) */}
-                {isExpanded && (
-                  <div className="px-8 pb-8 animate-in fade-in slide-in-from-top-2 duration-500">
-                    <div className="h-px bg-slate-100 mb-6"></div>
-                    
-                    {/* หัวตาราง (Desktop) - เพิ่มหัวข้อหมายเหตุแยกออกมา */}
-                    <div className="hidden lg:grid grid-cols-12 gap-5 px-8 py-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
-                      <div className="col-span-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">รหัสสินค้า (SKU)</div>
-                      <div className="col-span-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">รายการสินค้า / SUP</div>
-                      <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">สถานะสต็อก</div>
-                      <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider">หมายเหตุจัดซื้อ</div>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                      {bItems.map((item: OrderItem, idx: number) => {
-                        const isLowStock = Number(item.warehouseQty || item.Stock_Qty) <= 5;
-                        
-                        // ดึงค่าหมายเหตุจากตัวแปรที่มีโอกาสเป็นไปได้
-                        const note = item.notePurchase || item.noteReq || item.Note_Request || item.note;
-
-                        return (
-                          <div 
-                            key={`${batchId}-${item.id || idx}`} 
-                            className="group/item grid grid-cols-1 lg:grid-cols-12 items-center gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all shadow-sm hover:shadow-md"
-                          >
-                            {/* 1. SKU (2 cols) */}
-                            <div className="lg:col-span-2">
-                              <span className="inline-block bg-slate-950 text-emerald-400 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border-b-2 border-emerald-600">
-                                {item.productId || item.Product_ID || item.productID}
-                              </span>
-                            </div>
-
-                            {/* 2. รายการสินค้า & Supplier (4 cols) */}
-                            <div className="lg:col-span-4">
-                              <div className="flex flex-col">
-                                <p className="font-black text-[15px] uppercase italic text-slate-800 group-hover/item:text-emerald-600 transition-colors">
-                                  {item.name || item.Product_Name || item.productName}
-                                </p>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                                  SUP: {item.supplier || item.Supplier || '-'}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {/* 3. ตัวเลขสต็อก (3 cols) */}
-                            <div className="lg:col-span-3 grid grid-cols-2 gap-3">
-                              <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">หน้าร้าน</p>
-                                <p className="text-sm font-black text-slate-700">
-                                  {item.orderQty || item.Shop_Qty || '0'}
-                                </p>
-                              </div>
-                              <div className={`px-3 py-2 rounded-xl border text-center transition-all ${
-                                isLowStock 
-                                ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' 
-                                : 'bg-blue-50 border-blue-100 text-blue-600'
-                              }`}>
-                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">คลัง</p>
-                                <p className="text-sm font-black leading-none">
-                                  {item.warehouseQty || item.Stock_Qty || '0'}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* 4. ช่องหมายเหตุแยกออกมาโดยเฉพาะ (3 cols) */}
-                            <div className="lg:col-span-3">
-                              {note ? (
-                                <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
-                                  <p className="text-[10px] font-bold text-amber-600 italic leading-relaxed">
-                                    📌 {note}
-                                  </p>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-slate-300 italic">ไม่มีหมายเหตุ</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <div className="h-px flex-1 bg-slate-200"></div>
               </div>
-            );
-          })}
+
+              {/* --- รายการบิลของวันนั้นๆ --- */}
+              {batchIds.map((batchId) => {
+                const bItems = batches[batchId] || [];
+                const isExpanded = expandedBatches.has(batchId);
+
+                return (
+                  <div 
+                    key={batchId} 
+                    className="bg-white border border-slate-200 rounded-4xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md"
+                  >
+                    {/* ส่วนหัวของบิล (Header) */}
+                    <div 
+                      className={`p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
+                      onClick={() => toggleBatch(batchId)}
+                    >
+                      <div className="flex items-center gap-6 w-full md:w-auto">
+                        <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${isExpanded ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
+                          <span className="text-xl leading-none">{bItems.length}</span>
+                          <span className="text-[8px] uppercase">SKU</span>
+                        </div>
+                        
+                        <div>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">
+                            ชื่อรอบการสั่งซื้อ
+                          </span>
+                          <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                            {batchId}
+                          </h2>
+                          <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1 inline-block uppercase italic">
+                            กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 w-full md:w-auto">
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleOpenReview(batchId); 
+                          }}
+                          className="flex-1 md:flex-none bg-emerald-600 text-white hover:bg-slate-900 px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md active:scale-95 border-b-4 border-emerald-800"
+                        >
+                          📝 จัดการใบสั่งซื้อ
+                        </button>
+                        
+                        <div className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180 text-emerald-600' : 'text-slate-300'}`}>
+                          ▼
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ส่วนแสดงรายการสินค้าด้านใน (Expansion) */}
+                    {isExpanded && (
+                      <div className="px-8 pb-8 animate-in fade-in slide-in-from-top-2 duration-500">
+                        <div className="h-px bg-slate-100 mb-6"></div>
+                        
+                        <div className="hidden lg:grid grid-cols-12 gap-5 px-8 py-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+                          <div className="col-span-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">รหัสสินค้า (SKU)</div>
+                          <div className="col-span-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">รายการสินค้า / SUP</div>
+                          <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">สถานะสต็อก</div>
+                          <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider">หมายเหตุจัดซื้อ</div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                          {bItems.map((item: OrderItem, idx: number) => {
+                            const isLowStock = Number(item.warehouseQty || item.Stock_Qty) <= 5;
+                            const note = item.notePurchase || item.noteReq || item.Note_Request || item.note;
+
+                            return (
+                              <div 
+                                key={`${batchId}-${item.id || idx}`} 
+                                className="group/item grid grid-cols-1 lg:grid-cols-12 items-center gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all shadow-sm hover:shadow-md"
+                              >
+                                <div className="lg:col-span-2">
+                                  <span className="inline-block bg-slate-950 text-emerald-400 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border-b-2 border-emerald-600">
+                                    {item.productId || item.Product_ID || item.productID}
+                                  </span>
+                                </div>
+
+                                <div className="lg:col-span-4">
+                                  <div className="flex flex-col">
+                                    <p className="font-black text-[15px] uppercase italic text-slate-800 group-hover/item:text-emerald-600 transition-colors">
+                                      {item.name || item.Product_Name || item.productName}
+                                    </p>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                                      SUP: {item.supplier || item.Supplier || '-'}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                <div className="lg:col-span-3 grid grid-cols-2 gap-3">
+                                  <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 text-center">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">หน้าร้าน</p>
+                                    <p className="text-sm font-black text-slate-700">
+                                      {item.orderQty || item.Shop_Qty || '0'}
+                                    </p>
+                                  </div>
+                                  <div className={`px-3 py-2 rounded-xl border text-center transition-all ${
+                                    isLowStock ? 'bg-red-50 border-red-200 text-red-600' : 'bg-blue-50 border-blue-100 text-blue-600'
+                                  }`}>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">คลัง</p>
+                                    <p className="text-sm font-black leading-none">
+                                      {item.warehouseQty || item.Stock_Qty || '0'}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="lg:col-span-3">
+                                  {note ? (
+                                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
+                                      <p className="text-[10px] font-bold text-amber-600 italic leading-relaxed">
+                                        📌 {note}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-300 italic">ไม่มีหมายเหตุ</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {/* --- การแบ่งหน้า --- */}
@@ -809,6 +887,7 @@ useEffect(() => {
                     </button>
                   </div>
                 ))}
+                
               </div>
             </div>
 
