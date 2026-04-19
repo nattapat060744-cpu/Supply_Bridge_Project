@@ -920,7 +920,7 @@ useEffect(() => {
 
 {/* --- New Batch Modal (Single Screen & Fixed Layout) --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-[110] p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-110 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25)] w-full max-w-7xl h-[85vh] flex flex-col border border-white/50 animate-in zoom-in-95 duration-500 overflow-hidden">
             
             {/* --- Header: ลด Padding ลงเพื่อเพิ่มพื้นที่ทำงาน --- */}
@@ -960,7 +960,7 @@ useEffect(() => {
                     <input 
                       type="text" 
                       placeholder="ระบุชื่อรอบ เช่น: เครื่องเขียน ล็อตด่วน..." 
-                      className="w-full bg-white border border-slate-200 p-5 rounded-[1.5rem] font-bold outline-none focus:border-blue-500 focus:ring-4 ring-blue-500/5 transition-all text-lg shadow-sm"
+                      className="w-full bg-white border border-slate-200 p-5 rounded-3xl font-bold outline-none focus:border-blue-500 focus:ring-4 ring-blue-500/5 transition-all text-lg shadow-sm"
                       value={batchName}
                       onChange={(e) => setBatchName(e.target.value)}
                     />
@@ -1062,9 +1062,9 @@ useEffect(() => {
                   <button 
                     onClick={submitBatch} 
                     disabled={items.length === 0 || !batchName || isSubmitting}
-                    className={`w-full py-7 rounded-[2rem] font-black uppercase text-xs tracking-[0.4em] shadow-xl transition-all active:scale-[0.98] ${
+                    className={`w-full py-7 rounded-4xl font-black uppercase text-xs tracking-[0.4em] shadow-xl transition-all active:scale-[0.98] ${
                       items.length > 0 && !isSubmitting 
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-200' 
+                        ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-200' 
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
