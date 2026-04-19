@@ -19,6 +19,7 @@ interface StockItem {
   Note_Stock?: string;
   status?: string; 
   Recv_Date?: string; // เพิ่มฟิลด์วันที่รับของ
+  Created_At?: string;
 }
 
 export default function StockPage() {
@@ -114,49 +115,215 @@ export default function StockPage() {
     }
   };
 
-const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
-    // 1. หา GroupID ทั้งหมดที่มีสินค้าตรงกับคำค้นหา
+const handlePrint = (groupId: string, items: StockItem[]) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const now = new Date();
+    const displayDate = now.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const content = `
+      <html>
+        <head>
+          <title>ใบตรวจรับสินค้า - ${groupId}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+            body { font-family: 'Sarabun', sans-serif; padding: 20px; color: #000; }
+            .header-container { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .title-section h1 { margin: 0; font-size: 22px; font-weight: 700; }
+            .title-section p { margin: 2px 0 0 0; font-size: 13px; font-weight: bold; }
+            .batch-info { text-align: right; font-weight: bold; font-size: 14px; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { border: 1px solid #000; padding: 10px 5px; font-size: 12px; background-color: #f2f2f2; }
+            td { border: 1px solid #000; padding: 10px 8px; vertical-align: middle; }
+            
+            .product-name { font-weight: 700; font-size: 13px; margin: 0; }
+            .product-id { font-size: 10px; color: #444; margin-bottom: 2px; }
+            .supplier { font-size: 10px; color: #444; }
+            
+            .qty-cell { text-align: center; width: 70px; }
+            .qty-val { font-size: 15px; font-weight: 700; }
+            .qty-unit { font-size: 10px; display: block; margin-top: 2px; }
+            
+            /* เปลี่ยนจากกล่องมนเป็นเส้นขีดล่างสำหรับเขียน */
+            .line-input { 
+              border-bottom: 1px solid #000; 
+              height: 25px; 
+              width: 50px; 
+              margin: 0 auto; 
+            }
+            .line-note { 
+              border-bottom: 1px solid #000; 
+              height: 25px; 
+              width: 90%; 
+              margin: 0 auto; 
+            }
+            
+            .footer { margin-top: 40px; display: flex; justify-content: space-around; }
+            .sig-area { text-align: center; width: 220px; }
+            .sig-line { border-bottom: 1px dotted #000; height: 30px; margin-bottom: 8px; }
+            .sig-text { font-size: 12px; }
+
+            @media print {
+              @page { size: A4; margin: 1cm; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="title-section">
+              <h1>ใบตรวจรับสินค้า (Incoming Checklist)</h1>
+              <p>ประจำวันที่: ${displayDate}</p>
+            </div>
+            <div class="batch-info">
+              ID บิลกลุ่ม: ${groupId}
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 35%; text-align: left;">รายการสินค้า</th>
+                <th style="width: 10%;">ยอดสั่ง</th>
+                <th style="width: 12%;">จำนวน(ชิ้น)</th>
+                <th style="width: 12%;">จำนวนลัง (รับ)</th>
+                <th style="width: 12%;">จำนวน(ชิ้น) (รับ)</th>
+                <th>หมายเหตุการรับ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr>
+                  <td>
+                    <div class="product-id">ID: ${item.productID}</div>
+                    <div class="product-name">${item.productName}</div>
+                    <div class="supplier">ผู้ผลิต: ${item.supplier || '-'}</div>
+                  </td>
+                  <td class="qty-cell">
+                    <span class="qty-val">${item.orderCarton}</span>
+                    <span class="qty-unit">${item.cartonUnit}</span>
+                  </td>
+                  <td class="qty-cell">
+                    <span class="qty-val">${item.qtyPerCarton || 0}</span>
+                    <span class="qty-unit">${item.innerUnit}</span>
+                  </td>
+                  <td class="qty-cell">
+                    <div class="line-input"></div>
+                    <span class="qty-unit">${item.cartonUnit}</span>
+                  </td>
+                  <td class="qty-cell">
+                    <div class="line-input"></div>
+                    <span class="qty-unit">${item.innerUnit}</span>
+                  </td>
+                  <td>
+                    <div class="line-note"></div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div class="sig-area">
+              <div class="sig-line"></div>
+              <div class="sig-text">ลงชื่อ: ............................................<br/>ผู้ตรวจรับสินค้า (คลัง)</div>
+            </div>
+            <div class="sig-area">
+              <div class="sig-line"></div>
+              <div class="sig-text">ลงชื่อ: ............................................<br/>ผู้นำส่งสินค้า / พนักงานขับรถ</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { 
+              window.print(); 
+              setTimeout(() => { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
+  const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
+    // 1. กรอง GroupID จากคำค้นหา (เหมือนเดิม)
+    const s = searchTerm.toLowerCase();
     const matchingGroupIds = new Set(
       items
-        .filter(i => {
-          const s = searchTerm.toLowerCase();
-          return (
-            i.productName?.toLowerCase().includes(s) ||
-            i.productID?.toString().toLowerCase().includes(s) ||
-            i.groupId?.toLowerCase().includes(s) ||
-            i.supplier?.toLowerCase().includes(s)
-          );
-        })
+        .filter(i => 
+          i.productName?.toLowerCase().includes(s) ||
+          i.productID?.toString().toLowerCase().includes(s) ||
+          i.groupId?.toLowerCase().includes(s) ||
+          i.supplier?.toLowerCase().includes(s)
+        )
         .map(i => i.groupId)
     );
 
-    // 2. กรองสินค้า และจัดกลุ่ม
+    // 2. จัดกลุ่มสินค้าตาม GroupID (เหมือนเดิม)
     const groups: { [key: string]: StockItem[] } = {};
-    const groupOrder: string[] = []; // เก็บชื่อกลุ่มตามลำดับที่เจอในข้อมูล (ซึ่งมักจะเรียงมาแล้ว)
+    const groupOrder: string[] = [];
 
     items.forEach(item => {
       if (matchingGroupIds.has(item.groupId) && item.status === 'ORDERED') {
         if (!groups[item.groupId]) {
           groups[item.groupId] = [];
-          groupOrder.push(item.groupId); // เก็บกลุ่มใหม่ตามลำดับข้อมูลดิบ
+          groupOrder.push(item.groupId);
         }
         groups[item.groupId].push(item);
       }
     });
 
-    // 3. เรียงลำดับ: กลับด้านลำดับกลุ่มเพื่อให้ "กลุ่มล่าสุด" (ที่มักอยู่ท้ายตาราง) ขึ้นมาอยู่หน้าแรก
+    // 3. จัดลำดับบิล และทำ Pagination
     const groupKeys = groupOrder.reverse(); 
-
     const total = Math.ceil(groupKeys.length / itemsPerPage);
     const slicedKeys = groupKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     
-    const pagedBatches = slicedKeys.map(key => ({
-      id: key,
-      items: groups[key]
-    }));
+    // 4. 🔥 ส่วนที่แก้ไข: จัดกลุ่มบิลลงใน "วันที่" (เหมือนหน้าจัดซื้อ)
+    const pagedBatchesWithDate: { date: string, batches: { id: string, items: StockItem[] }[] }[] = [];
+    
+slicedKeys.forEach(key => {
+  const batchItems = groups[key];
+  const rawDate = batchItems[0]?.Created_At || ""; 
+
+  let dateLabel = "ไม่ระบุวันที่";
+
+  if (rawDate) {
+    // 1. แยกส่วนวันที่ออกมา (เผื่อมีเวลาติดมาด้วย)
+    const datePart = rawDate.split(' ')[0]; // เช่น "19/04/2026"
+    const [d, m, y] = datePart.split('/');
+    
+    // 2. แปลงเป็น Object Date (ระวังเรื่อง ค.ศ. / พ.ศ. ด้วยนะครับ)
+    // ถ้าใน Sheet เก็บเป็น พ.ศ. (เช่น 2569) ต้องลบ 543 ออกก่อนสร้าง Date Object
+    const year = parseInt(y) > 2500 ? parseInt(y) - 543 : parseInt(y);
+    const dateObj = new Date(year, parseInt(m) - 1, parseInt(d));
+
+    // 3. แปลงเป็น Format ภาษาไทยแบบเต็ม
+    dateLabel = dateObj.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
+  const existingDateGroup = pagedBatchesWithDate.find(g => g.date === dateLabel);
+  if (existingDateGroup) {
+    existingDateGroup.batches.push({ id: key, items: batchItems });
+  } else {
+    pagedBatchesWithDate.push({ date: dateLabel, batches: [{ id: key, items: batchItems }] });
+  }
+});
 
     return { 
-      currentBatches: pagedBatches,
+      currentBatches: pagedBatchesWithDate,
       totalPages: total,
       allGroupKeys: groupKeys 
     };
@@ -415,14 +582,30 @@ const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
           </div>
         </div>
       </div>
+      
+    <div className="space-y-10"> {/* ปรับระยะห่างระหว่างกลุ่มวันที่ */}
+      {currentBatches.map((dateGroup) => (
+        <div key={dateGroup.date} className="space-y-4">
+          
+          {/* --- ส่วนหัวข้อวันที่ (Date Divider) --- */}
+          <div className="flex items-center gap-4 py-2">
+            <div className="h-px flex-1 bg-slate-200"></div>
+            <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
+              <span className="text-sm">📅</span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                รายการของวันที่: {dateGroup.date}
+              </span>
+            </div>
+            <div className="h-px flex-1 bg-slate-200"></div>
+          </div>
 
-      <div className="space-y-4">
-        {currentBatches.map((batch) => {
-          const groupId = batch.id;
-          const bItems = batch.items;
-          const isExpanded = !!expandedBatches[groupId];
+          {/* วนลูปแสดงบิลในวันนั้นๆ */}
+          {dateGroup.batches.map((batch) => {
+            const groupId = batch.id;
+            const bItems = batch.items;
+            const isExpanded = !!expandedBatches[groupId];
 
-          return (
+            return (
             <div 
               key={groupId} 
               className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md"
@@ -450,7 +633,14 @@ const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
                   </div>
                 </div>
                 
+                
                 <div className="flex items-center gap-4 w-full md:w-auto">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handlePrint(batch.id, batch.items); }}
+                    className="bg-white text-slate-600 hover:bg-slate-100 px-4 py-3.5 rounded-xl font-black text-[11px] uppercase border border-slate-200 transition-all flex items-center gap-2"
+                  >
+                    🖨️ พิมพ์ใบเช็คของ
+                  </button>
                   <button 
                     onClick={(e) => { 
                       e.stopPropagation();
@@ -458,7 +648,7 @@ const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
                     }}
                     className="flex-1 md:flex-none bg-slate-950 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 px-6 py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md active:scale-95 border-b-4 border-yellow-600 flex items-center gap-2"
                   >
-                    📝 ตรวจรับเดี๋ยวนี้
+                    📝 เช็ครายการสินค้า
                   </button>
                   
                   <div className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180 text-yellow-500' : 'text-slate-200'}`}>
@@ -503,36 +693,50 @@ const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
                 );
               })}
             </div>
+          ))}
+      </div>
 
-      {totalPages > 1 && (
-        <div className="mt-12 flex justify-center items-center gap-2 pb-10">
-          <button 
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-blue-600 hover:text-white'}`}
-          >
-            ← ก่อนหน้า
-          </button>
-          <div className="flex gap-1 items-center">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(i => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i)}
-                className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
-              >
-                {i}
-              </button>
-            ))}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-12 flex justify-center items-center gap-2 pb-10">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
+            >
+              ← ก่อนหน้า
+            </button>
+            <div className="flex gap-1 items-center">
+              {(() => {
+                const pages = [];
+                const range = 1;
+                for (let i = 1; i <= totalPages; i++) {
+                  if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
+                    pages.push(<span key={i} className="px-2 text-slate-400">...</span>);
+                  }
+                }
+                return pages;
+              })()}
+            </div>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
+            >
+              ถัดไป →
+            </button>
           </div>
-          <button 
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-blue-600 hover:text-white'}`}
-          >
-            ถัดไป →
-          </button>
-        </div>
-      )}
+        )}
 
       {selectedBatch && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
@@ -579,8 +783,8 @@ const { currentBatches, totalPages, allGroupKeys } = useMemo(() => {
                       <th className="p-5 italic w-1/3">รายการสินค้า</th>
                       <th className="p-5 text-center bg-slate-800">ยอดสั่ง</th>
                       <th className="p-5 text-center bg-slate-800">ยอดเศษเดิม</th>
-                      <th className="p-5 text-center border-l border-slate-700">ยอดรับจริง</th>
-                      <th className="p-5 text-center">เศษที่รับจริง</th>
+                      <th className="p-5 text-center border-l border-slate-700">จำนวนลัง</th>
+                      <th className="p-5 text-center">จำนวนในกล่อง</th>
                       <th className="p-5">หมายเหตุการรับ</th>
                     </tr>
                   </thead>

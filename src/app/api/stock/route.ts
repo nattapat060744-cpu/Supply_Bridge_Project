@@ -39,7 +39,8 @@ export async function GET() {
         Recv_Qty: r.get('Recv_Qty'),
         Note_Stock: r.get('Note_Stock'),
         Recv_Date: r.get('Recv_Date') || '', 
-        status: r.get('Status')?.toString().trim().toUpperCase()
+        status: r.get('Status')?.toString().trim().toUpperCase(),
+        Created_At: r.get('Created_At') || r.get('Date') || ''
       }));
 
     return NextResponse.json(allItems);

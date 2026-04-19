@@ -68,6 +68,9 @@ export default function PurchasePage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
   const [rawData, setRawData] = useState<OrderItem[]>([]);
+
+  const [isAddingMore, setIsAddingMore] = useState(false);
+  const [targetGroupId, setTargetGroupId] = useState('');
   
   const discrepancyItems = useMemo(() => {
     if (!rawData) return [];
@@ -94,6 +97,8 @@ export default function PurchasePage() {
   }, [rawData]);
 
 const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+const [existingItems, setExistingItems] = useState<OrderItem[]>([]); // สำหรับโชว์เท่านั้น
 
 const fetchPendingOrders = async (retries = 2) => {
     const controller = new AbortController();
@@ -267,6 +272,30 @@ useEffect(() => {
     }
   };
 
+  const addItem = (product: any) => {
+  // เช็คว่าไอดีสินค้าตัวนี้ มีอยู่ในรายการ (items) หรือยัง
+  const productId = product.Product_ID || product.id;
+  const isDuplicate = items.some(item => item.id === productId);
+
+  if (isDuplicate) {
+    // ถ้ามีอยู่แล้ว ไม่ต้องทำอะไร หรือจะแจ้งเตือนก็ได้ครับ
+    return alert('รายการนี้มีอยู่ในบิลแล้วครับพี่ชาย');
+  }
+
+  // ถ้ายังไม่มี ค่อยเพิ่มเข้าไปใหม่
+  const newItem: OrderItem = {
+    id: productId,
+    name: product.Product_Name || product.name,
+    supplier: product.Supplier || product.supplier,
+    orderCarton: '1',
+    qtyPerCarton: product.Qty_Per_Carton || product.qtyPerCarton || '1',
+    cartonUnit: product.Carton_Unit || product.cartonUnit || 'ลัง',
+    innerUnit: product.Inner_Unit || product.innerUnit || 'ชิ้น',
+    notePur: '',
+  };
+  setItems([...items, newItem]);
+};
+
   const addItemToTempList = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id || !formData.name) return alert('กรุณาระบุรหัสและชื่อสินค้าครับ');
@@ -285,38 +314,51 @@ useEffect(() => {
     setFormData({ id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: '' });
   };
 
-  const submitBatch = async () => {
-      if (isSubmitting) return;
-      if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+const submitBatch = async () => {
+    if (isSubmitting) return;
+    if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+    
+    setIsSubmitting(true);
+    try {
+      // 🔥 แก้ไขจุดนี้: ใช้ Format วันที่ไทยแทน ISO String
+      const now = new Date();
+      const thaiDate = now.toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const thaiTime = now.toLocaleTimeString('th-TH', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
       
-      setIsSubmitting(true);
-      try {
-        const now = new Date().toISOString();
+      const formattedDate = `${thaiDate} ${thaiTime}`; // จะได้ "19/04/2569 12:24:00"
 
-        const res = await fetch('/api/purchase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            groupName: batchName, 
-            items: items,
-            createdAt: now,
-            groupId: `จัดซื้อสั่งของ-${Date.now()}` 
-          }),
-        });
+      const res = await fetch('/api/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          groupName: batchName, 
+          items: items,
+          createdAt: formattedDate, // 🔥 ส่งค่าที่อ่านง่ายไปแทน
+          groupId: batchName.trim() 
+        }),
+      });
 
-        if (res.ok) {
-          alert('🚀 ส่งบิลสั่งซื้อใหม่สำเร็จแล้วครับ!');
-          setIsModalOpen(false);
-          setItems([]);
-          setBatchName('');
-          fetchPendingOrders();
-        }
-      } catch (err) {
-        alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
-      } finally {
-        setIsSubmitting(false);
+      if (res.ok) {
+        alert('🚀 ส่งบิลสั่งซื้อใหม่สำเร็จแล้วครับ!');
+        setIsModalOpen(false);
+        setItems([]);
+        setBatchName('');
+        fetchPendingOrders();
       }
-    };
+    } catch (err) {
+      alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const autoFillOrderQty = () => {
     const newItems = reviewItems.map(item => ({
@@ -393,6 +435,47 @@ useEffect(() => {
       return groups;
     }, [filteredBatchKeys, batches, currentPage, itemsPerPage]);
 
+  const submitAddMore = async () => {
+    if (items.length === 0 || !targetGroupId || isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      const now = new Date().toISOString();
+      
+      // เตรียมข้อมูลทั้งหมด (ทั้งเก่าและใหม่) ส่งไปใน groupId เดิม
+      const finalItems = items.map(item => ({
+        ...item,
+        groupId: targetGroupId,
+        status: 'ORDERED',
+        createdAt: now,
+      }));
+
+      const res = await fetch('/api/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          groupName: targetGroupId, 
+          items: finalItems,
+          createdAt: now,
+          groupId: targetGroupId,
+          isUpdate: true // ส่ง Flag ไปบอก API ว่านี่คือการอัปเดตบิลเดิมนะ
+        }),
+      });
+
+      if (res.ok) {
+        alert(`🚀 อัปเดตบิล "${targetGroupId}" เรียบร้อย! (รวมเป็น ${items.length} รายการ)`);
+        setIsAddingMore(false);
+        setIsModalOpen(false);
+        setItems([]);
+        fetchPendingOrders();
+      }
+    } catch (err) {
+      alert('เกิดข้อผิดพลาดในการบันทึกครับ');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const totalPages = Math.ceil(filteredBatchKeys.length / itemsPerPage);
   const currentBatches = filteredBatchKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -435,8 +518,15 @@ useEffect(() => {
             </p>
           </div>
           <div className="flex gap-3 mt-8 md:mt-0">
-             <button 
-                onClick={() => setIsModalOpen(true)}
+              <button 
+                onClick={() => {
+                  // 🔥 ล้างค่าเก่าทิ้งก่อนสร้างบิลใหม่
+                  setIsAddingMore(false);
+                  setTargetGroupId('');
+                  setBatchName('');
+                  setItems([]); 
+                  setIsModalOpen(true);
+                }}
                 className="bg-slate-900 text-white hover:bg-emerald-600 px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
               >
                 <span className="text-xl">+</span> สร้างบิลใหม่
@@ -548,10 +638,11 @@ useEffect(() => {
           </div>
         </div>
 
-{/* --- รายการบิลสินค้า --- */}
+        {/* --- รายการบิลสินค้า --- */}
         <div className="space-y-10">
-          {Object.entries(groupedByDate).map(([dateLabel, batchIds]) => (
-            <div key={dateLabel} className="space-y-6">
+          {Object.entries(groupedByDate).map(([dateLabel, batchIds], groupIdx) => (
+            // 🔥 เติม idx เข้าไปใน key ของกลุ่มวันที่
+            <div key={`date-group-${dateLabel}-${groupIdx}`} className="space-y-6">
               
               {/* --- ส่วนหัวข้อวันที่ (Date Header) --- */}
               <div className="flex items-center gap-4 py-4">
@@ -572,8 +663,8 @@ useEffect(() => {
 
                 return (
                   <div 
-                    key={batchId} 
-                    className="bg-white border border-slate-200 rounded-4xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md"
+                    key={`batch-card-${batchId}`} // 🔥 แก้ให้มี prefix นำหน้าแบบนี้ครับ
+                    className="bg-white border border-slate-200 ..."
                   >
                     {/* ส่วนหัวของบิล (Header) */}
                     <div 
@@ -600,6 +691,27 @@ useEffect(() => {
                       </div>
                       
                       <div className="flex items-center gap-4 w-full md:w-auto">
+                        {/* 🔥 เพิ่มเฉพาะปุ่มนี้เข้ามาครับ */}
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setTargetGroupId(batchId);
+                              setIsAddingMore(true);
+                              setBatchName(batchId);
+                              
+                              // 🔥 1. เอาของเก่าไปเก็บไว้ใน State Preview (existingItems)
+                              setExistingItems(bItems); 
+
+                              // 🔥 2. เคลียร์ตะกร้าของใหม่ (items) ให้ว่าง เพื่อเริ่มเลือกใหม่
+                              setItems([]); 
+                              
+                              setIsModalOpen(true);
+                            }}
+                            className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-6 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all border border-blue-100 shadow-sm active:scale-95"
+                          >
+                            ➕ เพิ่มของ/แก้ไข
+                          </button>
+
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
@@ -615,8 +727,9 @@ useEffect(() => {
                         </div>
                       </div>
                     </div>
+                    
 
-                    {/* ส่วนแสดงรายการสินค้าด้านใน (Expansion) */}
+                    {/* ส่วนแสดงรายการสินค้าด้านใน (Expansion) - โค้ดเดิมทั้งหมด */}
                     {isExpanded && (
                       <div className="px-8 pb-8 animate-in fade-in slide-in-from-top-2 duration-500">
                         <div className="h-px bg-slate-100 mb-6"></div>
@@ -635,7 +748,9 @@ useEffect(() => {
 
                             return (
                               <div 
-                                key={`${batchId}-${item.id || idx}`} 
+                                // 🔥 แก้ไขตรงนี้ครับ: ใช้คำนำหน้า + ชื่อบิล + รหัสสินค้า + ลำดับ (idx) 
+                                // เพื่อให้มั่นใจ 100% ว่าต่อให้สินค้าซ้ำกันในบิลเดียว key ก็จะไม่ชนกัน
+                                key={`order-item-${batchId}-${item.productId || item.Product_ID || 'no-id'}-${idx}`} 
                                 className="group/item grid grid-cols-1 lg:grid-cols-12 items-center gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all shadow-sm hover:shadow-md"
                               >
                                 <div className="lg:col-span-2">
@@ -696,7 +811,7 @@ useEffect(() => {
           ))}
         </div>
 
-        {/* --- การแบ่งหน้า --- */}
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-12 flex justify-center items-center gap-2 pb-10">
             <button 
@@ -756,6 +871,7 @@ useEffect(() => {
                 >
                   ⚡ สั่งตามยอดหน้าร้าน
                 </button>
+
               </div>
               <button onClick={() => setReviewBatch(null)} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
                 <span className="text-2xl">✕</span>
@@ -918,7 +1034,7 @@ useEffect(() => {
         </div>
       )}
 
-{/* --- New Batch Modal (Single Screen & Fixed Layout) --- */}
+      {/* --- New Batch Modal (Single Screen & Fixed Layout) --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-110 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25)] w-full max-w-7xl h-[85vh] flex flex-col border border-white/50 animate-in zoom-in-95 duration-500 overflow-hidden">
@@ -960,9 +1076,12 @@ useEffect(() => {
                     <input 
                       type="text" 
                       placeholder="ระบุชื่อรอบ เช่น: เครื่องเขียน ล็อตด่วน..." 
-                      className="w-full bg-white border border-slate-200 p-5 rounded-3xl font-bold outline-none focus:border-blue-500 focus:ring-4 ring-blue-500/5 transition-all text-lg shadow-sm"
+                      className={`w-full border p-5 rounded-3xl font-bold outline-none transition-all text-lg shadow-sm ${
+                        isAddingMore ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:border-blue-500 focus:ring-4 ring-blue-500/5'
+                      }`}
                       value={batchName}
-                      onChange={(e) => setBatchName(e.target.value)}
+                      onChange={(e) => !isAddingMore && setBatchName(e.target.value)} // ถ้าไม่ใช่การเพิ่มของเดิม ให้พิมพ์ได้ปกติ
+                      readOnly={isAddingMore} // ถ้าจะเพิ่มของเข้าบิลเดิม ห้ามแก้ชื่อ
                     />
                   </div>
 
