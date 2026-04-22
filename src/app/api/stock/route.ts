@@ -54,15 +54,20 @@ export async function PATCH(req: Request) {
     const sheet = await getSheet();
     const rows = await sheet.getRows();
     
-    // 1. ค้นหาแถว: ใช้ productID เป็นหลัก (ถ้าไม่มีค่อยใช้ rowId) เพื่อความแม่นยำตอน Import
-    const row: any = rows.find(r => 
-      (body.productID && r.get('Product_ID')?.toString().trim() === body.productID.toString().trim()) ||
-      (r.rowNumber === body.rowId)
-    );
+    // 1. ค้นหาแถว: ใช้ rowId (rowNumber) เป็นหลักเพื่อความแม่นยำที่สุดในตำแหน่ง Google Sheets
+    const row: any = rows.find(r => r.rowNumber === body.rowId);
 
     if (row) {
+      // 🔥 [จุดที่เพิ่ม] เช็คสถานะปัจจุบันก่อน ถ้าบันทึกเสร็จไปแล้ว (COMPLETED) ให้บล็อกทันที
+      const currentStatus = row.get('Status')?.toString().trim();
+      if (currentStatus === 'COMPLETED') {
+        return NextResponse.json({ 
+          success: false, 
+          message: `รายการแถวที่ ${body.rowId} นี้ถูกบันทึกไปแล้ว ไม่สามารถ Import ซ้ำได้ครับพี่ชาย` 
+        }, { status: 400 });
+      }
+
       // 2. จัดการเลขที่บิล (Invoice_No) 
-      // รับค่าที่พี่ชายส่งกลับมา (updatingItem.invoiceNo)
       const incomingInvoice = body.invoiceNo; 
       
       // 3. อัปเดตข้อมูลทั่วไปที่ส่งมาจากหน้าบ้าน
@@ -71,25 +76,27 @@ export async function PATCH(req: Request) {
       if (body.Recv_Qty !== undefined) row.set('Recv_Qty', body.Recv_Qty);
       if (body.Note_Stock !== undefined) row.set('Note_Stock', body.Note_Stock);
       
+      // เปลี่ยนสถานะเป็นสำเร็จ
       row.set('Status', 'COMPLETED');
       row.set('Recv_Unit', row.get('Carton_Unit') || '');
       row.set('Recv_Qty_Unit', row.get('Inner_Unit') || '');
-      row.set('Recv_Date', body.Recv_Date); // ใช้วันที่ที่พี่ชายฟอร์แมตมาจากหน้าบ้าน
+      row.set('Recv_Date', body.Recv_Date); 
 
-      // 4. 🔥 บังคับเขียนลง Invoice_No (คอลัมน์ V) 
+      // 4. บังคับเขียนลง Invoice_No (คอลัมน์ V) 
       const headers = sheet.headerValues;
       const invoiceColIndex = headers.findIndex(h => h.trim() === 'Invoice_No');
 
       if (invoiceColIndex !== -1) {
-        // ถ้าหน้าบ้านส่งมา (ไม่ว่าจะค่าเดิมหรือค่าใหม่) ให้เขียนทับลงไปเพื่อยืนยันข้อมูล
         if (incomingInvoice !== undefined) {
           row._rawData[invoiceColIndex] = String(incomingInvoice).trim();
         }
       }
 
+      // เซฟข้อมูลลง Google Sheets
       await row.save();
       return NextResponse.json({ success: true });
     }
+
     return NextResponse.json({ success: false, message: 'ไม่พบรายการที่ต้องการอัปเดต' }, { status: 404 });
   } catch (error: any) {
     console.error('PATCH Error:', error.message);

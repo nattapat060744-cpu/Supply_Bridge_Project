@@ -643,52 +643,82 @@ const exportToExcel = () => {
     setShowExportOptions(false);
   };
 
-  const handleConfirmImport = async () => {
-      if (!receiverName) {
-        alert('พี่ชายใส่ชื่อผู้ตรวจรับก่อนครับ');
-        return;
-      }
+const handleConfirmImport = async () => {
+    if (!receiverName) {
+      alert('พี่ชายใส่ชื่อผู้ตรวจรับก่อนครับ');
+      return;
+    }
 
-      setIsSubmitting(true);
-      try {
-        for (const row of importData) {
-          const rowId = row['ID อ้างอิง'];
-          if (!rowId) continue;
+    setIsSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    let skipMessages: string[] = [];
 
-          const payload = {
-            rowId: Number(rowId), // มั่นใจว่าเป็น Number ตามที่หลังบ้านเช็ค rowNumber
-            receiver: receiverName,
-            recvCarton: String(row['รับจริง (กล่อง)'] || '0'),
-            Recv_Qty: String(row['รับจริง (ชิ้น)'] || '0'),
-            invoiceNo: String(row['เลขที่บิล'] || ''),
-            Note_Stock: String(row['หมายเหตุ'] || ''),
-            Recv_Date: new Date().toLocaleDateString('th-TH', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
-        }),
-          };
+    try {
+      for (const row of importData) {
+        const rowId = row['ID อ้างอิง'];
+        if (!rowId) continue;
 
-
-          await fetch('/api/stock', { 
-            method: 'PATCH', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
+        // 🔥 ตรวจสอบหน้าบ้านเบื้องต้น: ถ้าในรายการปัจจุบัน (items) ไม่มี rowId นี้แล้ว (แปลว่าอาจถูกตรวจรับไปแล้ว) ให้ข้าม
+        const isStillOrdered = items.find(item => item.rowId === Number(rowId));
+        if (!isStillOrdered) {
+          skipMessages.push(`แถวที่ ${rowId} บันทึกไปแล้ว (ข้าม)`);
+          continue;
         }
 
-        alert('นำเข้าข้อมูลสำเร็จแล้วครับพี่ชาย!');
-        setShowImportModal(false);
-        window.location.reload(); 
-      } catch (error) {
-        console.error("Error:", error);
-        alert('บันทึกไม่สำเร็จครับ');
-      } finally {
-        setIsSubmitting(false);
+        const payload = {
+          rowId: Number(rowId),
+          receiver: receiverName,
+          recvCarton: String(row['รับจริง (กล่อง)'] || '0'),
+          Recv_Qty: String(row['รับจริง (ชิ้น)'] || '0'),
+          invoiceNo: String(row['เลขที่บิล'] || ''),
+          Note_Stock: String(row['หมายเหตุ'] || ''),
+          Recv_Date: new Date().toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+        };
+
+        const response = await fetch('/api/stock', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          successCount++;
+        } else {
+          // ถ้าหลังบ้านบอกว่า COMPLETED แล้ว (Error 400) หรือ Error อื่นๆ
+          failCount++;
+          if (result.message) skipMessages.push(result.message);
+        }
       }
-    };
+
+      // แสดงสรุปผลให้พี่ชายทราบ
+      let finalMessage = `บันทึกสำเร็จ ${successCount} รายการ`;
+      if (failCount > 0 || skipMessages.length > 0) {
+        finalMessage += `\nมีการข้ามหรือผิดพลาด ${failCount + skipMessages.length} รายการ`;
+        console.log("รายละเอียดการข้าม:", skipMessages);
+      }
+
+      alert(finalMessage);
+      
+      setShowImportModal(false);
+      // รีโหลดเพื่ออัปเดตข้อมูลล่าสุดจาก Sheet
+      window.location.reload(); 
+
+    } catch (error) {
+      console.error("Error:", error);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับพี่ชาย');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
       <div className="max-w-6xl mx-auto p-4 md:p-10">
@@ -906,9 +936,6 @@ const exportToExcel = () => {
                         <div>
                           <p className="text-[11px] font-black text-slate-400 leading-none mb-2 uppercase tracking-widest">ID: {pId}</p>
                           <p className="text-xl font-black text-slate-800 leading-tight uppercase tracking-tight mb-1">{productInfo.productName}</p>
-                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-1 rounded font-black uppercase italic">
-                             บรรจุ: {productInfo.qtyPerCarton} {productInfo.innerUnit}/{productInfo.cartonUnit}
-                          </span>
                         </div>
                       </div>
                     </td>
@@ -922,7 +949,7 @@ const exportToExcel = () => {
                         </p>
                         <div className="w-20 h-0.75 bg-yellow-400 my-1 rounded-full"></div>
                         <p className="text-sm font-black text-amber-600 italic">
-                          รวม {totalInnerQty.toLocaleString()} {productInfo.innerUnit}
+                          บรรจุ: {productInfo.qtyPerCarton} {productInfo.innerUnit}
                         </p>
                       </div>
                     </td>
@@ -957,7 +984,7 @@ const exportToExcel = () => {
                                     <div className="text-right px-8 border-r-2 border-slate-100">
                                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1 italic">ยอดบิลนี้</p>
                                       <p className="text-xl font-black text-slate-900">{batch.orderCarton} {batch.cartonUnit}</p>
-                                      <p className="text-[11px] font-bold text-amber-600">(= {bInnerQty.toLocaleString()} {productInfo.innerUnit})</p>
+                                      <p className="text-[11px] font-bold text-amber-600">บรรจุ:  {bInnerQty.toLocaleString()} {productInfo.innerUnit}</p>
                                     </div>
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); setSelectedBatch([batch]); }}
