@@ -17,7 +17,6 @@ export async function GET() {
   try {
     const sheet = await getSheet();
     const rows = await sheet.getRows();
-    
     const allItems = rows
       .filter(r => {
         const status = r.get('Status')?.toString().trim().toUpperCase();
@@ -40,9 +39,9 @@ export async function GET() {
         Note_Stock: r.get('Note_Stock'),
         Recv_Date: r.get('Recv_Date') || '', 
         status: r.get('Status')?.toString().trim().toUpperCase(),
-        Created_At: r.get('Created_At') || r.get('Date') || ''
+        Created_At: r.get('Created_At') || r.get('Date') || '',
+        invoiceNo: r.get('Invoice_No') || r.get('เลขที่บิล') || '' 
       }));
-
     return NextResponse.json(allItems);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -54,49 +53,46 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const sheet = await getSheet();
     const rows = await sheet.getRows();
-    const row = rows.find(r => r.rowNumber === body.rowId);
+    
+    // 1. ค้นหาแถว: ใช้ productID เป็นหลัก (ถ้าไม่มีค่อยใช้ rowId) เพื่อความแม่นยำตอน Import
+    const row: any = rows.find(r => 
+      (body.productID && r.get('Product_ID')?.toString().trim() === body.productID.toString().trim()) ||
+      (r.rowNumber === body.rowId)
+    );
 
     if (row) {
-      // 1. บันทึกชื่อผู้รับ (ถ้ามีส่งมา เช่น การตรวจรับครั้งแรก)
-      if (body.receiver) {
-        row.set('Receiver_Name', body.receiver);
-      }
+      // 2. จัดการเลขที่บิล (Invoice_No) 
+      // รับค่าที่พี่ชายส่งกลับมา (updatingItem.invoiceNo)
+      const incomingInvoice = body.invoiceNo; 
       
-      // 2. บันทึกจำนวนลัง (ใช้ค่าที่คำนวณสุทธิมาจากหน้าบ้านแล้ว)
-      if (body.recvCarton !== undefined) {
-        row.set('Recv_Carton', body.recvCarton);
-      }
+      // 3. อัปเดตข้อมูลทั่วไปที่ส่งมาจากหน้าบ้าน
+      if (body.receiver !== undefined) row.set('Receiver_Name', body.receiver);
+      if (body.recvCarton !== undefined) row.set('Recv_Carton', body.recvCarton);
+      if (body.Recv_Qty !== undefined) row.set('Recv_Qty', body.Recv_Qty);
+      if (body.Note_Stock !== undefined) row.set('Note_Stock', body.Note_Stock);
       
-      // 3. หน่วยลัง (ดึงจากต้นทางเสมอ)
-      row.set('Recv_Unit', row.get('Carton_Unit'));
-      
-      // 4. บันทึกจำนวนเศษในกล่อง (ใช้ค่าที่คำนวณสุทธิมาจากหน้าบ้านแล้ว)
-      if (body.Recv_Qty !== undefined) {
-        row.set('Recv_Qty', body.Recv_Qty);
-      }
-      
-      // 5. หน่วยเศษ (ดึงจากต้นทางเสมอ)
-      row.set('Recv_Qty_Unit', row.get('Inner_Unit'));
-      
-      // 6. บันทึกหมายเหตุ **จุดนี้สำคัญมาก**
-      // หน้าบ้านจะส่ง Note_Stock ที่รวมประวัติ [แก้ไข: ลัง +1...] มาให้แล้ว บันทึกทับได้เลย
-      if (body.Note_Stock !== undefined) {
-        row.set('Note_Stock', body.Note_Stock);
-      }
-      
-      // 7. สถานะเป็น COMPLETED เสมอ
-      row.set('Status', 'COMPLETED'); 
+      row.set('Status', 'COMPLETED');
+      row.set('Recv_Unit', row.get('Carton_Unit') || '');
+      row.set('Recv_Qty_Unit', row.get('Inner_Unit') || '');
+      row.set('Recv_Date', body.Recv_Date); // ใช้วันที่ที่พี่ชายฟอร์แมตมาจากหน้าบ้าน
 
-      // 8. บันทึกวันที่อัปเดตล่าสุด
-      // ใช้ค่าที่ส่งมาจากหน้าบ้านเพื่อให้เวลาใน UI กับใน Sheet ตรงกัน
-      const thaiDate = body.Recv_Date || new Date().toLocaleDateString('th-TH');
-      row.set('Recv_Date', thaiDate);
+      // 4. 🔥 บังคับเขียนลง Invoice_No (คอลัมน์ V) 
+      const headers = sheet.headerValues;
+      const invoiceColIndex = headers.findIndex(h => h.trim() === 'Invoice_No');
+
+      if (invoiceColIndex !== -1) {
+        // ถ้าหน้าบ้านส่งมา (ไม่ว่าจะค่าเดิมหรือค่าใหม่) ให้เขียนทับลงไปเพื่อยืนยันข้อมูล
+        if (incomingInvoice !== undefined) {
+          row._rawData[invoiceColIndex] = String(incomingInvoice).trim();
+        }
+      }
 
       await row.save();
       return NextResponse.json({ success: true });
     }
-    return NextResponse.json({ success: false }, { status: 404 });
+    return NextResponse.json({ success: false, message: 'ไม่พบรายการที่ต้องการอัปเดต' }, { status: 404 });
   } catch (error: any) {
+    console.error('PATCH Error:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

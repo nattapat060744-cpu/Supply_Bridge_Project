@@ -338,7 +338,7 @@ useEffect(() => {
       });
 
       // 2. ชื่อบิลที่จะบันทึก (ชื่อที่พี่ชายพิมพ์ + วันที่เวลาปัจจุบัน)
-      const finalBatchName = `${batchName} (${displayDate} ${displayTime})`;
+      const finalBatchName = `${batchName} (${displayDate})`;
       
       // 3. วันที่แบบ Full ISO สำหรับฟิลด์ Created_At (เพื่อให้ระบบหลังบ้านเรียงข้อมูลแม่นยำ)
       const isoString = now.toISOString(); 
@@ -552,81 +552,94 @@ useEffect(() => {
         </div>
 
         {/* --- รายการตรวจสอบสินค้าที่ไม่ครบ --- */}
-        {discrepancyItems.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3 px-2">
-              <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-red-500 rounded-full"></span>
-                ติดตามรายการที่มีปัญหา ({
-                  discrepancyItems.filter((item, index, self) => 
-                    index === self.findIndex((t) => t.id === item.id)
-                  ).length
-                })
-              </h2>
-              <span className="text-[9px] font-bold text-slate-400 italic">เลื่อนดูรายการ ↔</span>
-            </div>
-            
-            <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar-h snap-x">
-              {discrepancyItems
-                .filter((item, index, self) => 
-                  index === self.findIndex((t) => t.id === item.id)
-                )
-                .map((item, idx) => {
-                  const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
-                  const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
-                  
-                  return (
-                    <div key={`issue-${item.id || item.productID || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-sm hover:border-red-200 transition-all">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-1">
-                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                            {item.productID || item.productId}
+      {discrepancyItems.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3 px-2">
+            <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
+              <span className="w-1.5 h-4 bg-red-500 rounded-full"></span>
+              ติดตามรายการที่มีปัญหา ({
+                discrepancyItems.filter((item, index, self) => 
+                  index === self.findIndex((t) => (t.id || t.productID) === (item.id || item.productID))
+                ).length
+              })
+            </h2>
+            <span className="text-[9px] font-bold text-slate-400 italic">เลื่อนดูรายการ ↔</span>
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar-h snap-x">
+            {discrepancyItems
+              .filter((item, index, self) => 
+                index === self.findIndex((t) => (t.id || t.productID) === (item.id || item.productID))
+              )
+              .map((item, idx) => {
+                // คู่ที่ 1: ลัง เทียบ ลัง
+                const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
+                // คู่ที่ 2: บรรจุ/ลัง เทียบ รับจริง(ชิ้น)
+                const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
+                
+                return (
+                  <div key={`issue-${item.id || item.productID || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-sm hover:border-red-200 transition-all">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex flex-wrap items-center gap-1 max-w-[60%]">
+                        <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
+                          {item.productID || item.productId}
+                        </span>
+                        {item.supplier && (
+                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate">
+                            {item.supplier}
                           </span>
-                          {item.supplier && (
-                            <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                              - {item.supplier}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1">
-                          {diffCarton !== 0 ? (
-                            <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
-                              {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
-                            </span>
-                          ) : diffInner !== 0 ? (
-                            <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                              {diffInner < 0 ? `ขาดในกล่อง ${Math.abs(diffInner)}` : `เกินในกล่อง ${diffInner}`} {item.innerUnit}
-                            </span>
-                          ) : null}
-                        </div>
+                        )}
                       </div>
 
-                      <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4">
-                        {item.name || item.Product_Name}
-                      </h4>
+                      <div className="flex flex-col items-end gap-1">
+                        {/* 1. เช็คส่วนต่างลัง (แยกอิสระ) */}
+                        {diffCarton !== 0 && (
+                          <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
+                            {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
+                          </span>
+                        )}
+                        
+                        {/* 2. เช็คส่วนต่างเศษ (แยกอิสระ - จะโชว์พร้อมกันหรือโชว์เดี่ยวก็ได้) */}
+                        {diffInner !== 0 && (
+                          <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                            {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                  <div className="bg-slate-50 rounded-2xl p-3 mb-4">
-                    <div className="flex justify-between text-[10px] mb-1">
-                      <span className="text-slate-400 uppercase font-black">สั่งซื้อ</span>
-                      <span className="text-slate-900 font-black">{item.orderCarton} {item.cartonUnit}(+ {item.qtyPerCarton || 0} {item.innerUnit})</span>
+                    <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4">
+                      {item.name || item.Product_Name || item.productName}
+                    </h4>
+
+                    <div className="bg-slate-50 rounded-2xl p-4 mb-3 space-y-2">
+                      <div className="flex justify-between text-[11px] font-bold">
+                        <span className="text-slate-400 font-medium">ค่าอ้างอิง:</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-slate-900">{item.orderCarton} {item.cartonUnit}</span>
+                          <span className="text-slate-500 text-[10px]">บรรจุ {item.qtyPerCarton} {item.innerUnit}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
+                        <span className="text-slate-400 font-medium">ตรวจรับจริง:</span>
+                        <div className="flex flex-col items-end text-red-600 italic">
+                           <span className="font-black">{item.recvCarton} {item.cartonUnit}</span>
+                           <span className="font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-slate-400 uppercase font-black">รับจริง</span>
-                      <span className="text-red-600 font-black">{item.recvCarton} {item.cartonUnit} (+ {item.Recv_Qty || 0} {item.innerUnit})</span>
-                    </div>
+
                     {item.Recv_Date && (
-                      <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 font-black uppercase tracking-tighter">
-                        รับเมื่อ: {item.Recv_Date}
+                      <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 font-black uppercase italic">
+                        อัปเดต: {item.Recv_Date}
                       </div>
                     )}
                   </div>
-                    </div>
-                  );
+                );
               })}
-            </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* --- แถบค้นหา --- */}
         <div className="mb-8 flex flex-col md:flex-row gap-4">
