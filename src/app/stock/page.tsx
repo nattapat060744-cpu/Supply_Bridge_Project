@@ -659,7 +659,7 @@ const handleConfirmImport = async () => {
         const rowId = row['ID อ้างอิง'];
         if (!rowId) continue;
 
-        // 1. ตรวจสอบหน้าบ้านเบื้องต้น: ถ้าไม่มี rowId นี้ในรายการที่รอตรวจ (items) ให้ข้ามทันที
+        // 🔥 ตรวจสอบหน้าบ้านเบื้องต้น: ถ้าในรายการปัจจุบัน (items) ไม่มี rowId นี้แล้ว (แปลว่าอาจถูกตรวจรับไปแล้ว) ให้ข้าม
         const isStillOrdered = items.find(item => item.rowId === Number(rowId));
         if (!isStillOrdered) {
           skipMessages.push(`แถวที่ ${rowId} บันทึกไปแล้ว (ข้าม)`);
@@ -668,15 +668,18 @@ const handleConfirmImport = async () => {
 
         const payload = {
           rowId: Number(rowId),
-          // เพิ่มการส่ง Product_ID ไปด้วยเพื่อทำ Double Check ที่หลังบ้าน (ถ้ามีในไฟล์ Excel)
-          productID: String(row['รหัสสินค้า'] || '').trim(), 
           receiver: receiverName,
           recvCarton: String(row['รับจริง (กล่อง)'] || '0'),
           Recv_Qty: String(row['รับจริง (ชิ้น)'] || '0'),
           invoiceNo: String(row['เลขที่บิล'] || ''),
           Note_Stock: String(row['หมายเหตุ'] || ''),
-          // 🔥 เปลี่ยนวันที่จากภาษาไทย เป็น ISO String เพื่อให้ Google Sheets และระบบหลังบ้านบันทึกได้แม่นยำ
-          Recv_Date: new Date().toISOString(), 
+          Recv_Date: new Date().toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
         };
 
         const response = await fetch('/api/stock', { 
@@ -690,34 +693,28 @@ const handleConfirmImport = async () => {
         if (response.ok && result.success) {
           successCount++;
         } else {
-          // กรณีหลังบ้านตอบกลับว่า COMPLETED แล้ว หรือ Error อื่นๆ
+          // ถ้าหลังบ้านบอกว่า COMPLETED แล้ว (Error 400) หรือ Error อื่นๆ
           failCount++;
-          if (result.message) {
-            skipMessages.push(`แถวที่ ${rowId}: ${result.message}`);
-          }
+          if (result.message) skipMessages.push(result.message);
         }
       }
 
-      // 2. แสดงสรุปผลให้ละเอียดขึ้น พนักงานจะได้ตรวจสอบไฟล์ Excel ได้ถูก
-      let finalMessage = `✅ บันทึกสำเร็จ: ${successCount} รายการ`;
-      
-      if (skipMessages.length > 0) {
-        finalMessage += `\n⚠️ ข้าม/ผิดพลาด: ${skipMessages.length} รายการ`;
-        console.warn("รายละเอียดที่ไม่สำเร็จ:", skipMessages);
+      // แสดงสรุปผลให้พี่ชายทราบ
+      let finalMessage = `บันทึกสำเร็จ ${successCount} รายการ`;
+      if (failCount > 0 || skipMessages.length > 0) {
+        finalMessage += `\nมีการข้ามหรือผิดพลาด ${failCount + skipMessages.length} รายการ`;
+        console.log("รายละเอียดการข้าม:", skipMessages);
       }
 
       alert(finalMessage);
       
       setShowImportModal(false);
-
-      // 3. หน่วงเวลาเล็กน้อยก่อน Reload เพื่อให้พนักงานกด OK ใน Alert ทัน
-      setTimeout(() => {
-        window.location.reload(); 
-      }, 500);
+      // รีโหลดเพื่ออัปเดตข้อมูลล่าสุดจาก Sheet
+      window.location.reload(); 
 
     } catch (error) {
       console.error("Error:", error);
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับพี่ชาย โปรดเช็คเน็ตหรือลองอีกครั้ง');
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับพี่ชาย');
     } finally {
       setIsSubmitting(false);
     }
