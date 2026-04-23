@@ -539,11 +539,27 @@ const fetchStatus = async () => {
   };
 
 const submitBatch = async () => {
-    if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
-    
+    // 1. ดักข้อมูลเบื้องต้น: ชื่อรอบต้องมี และต้องมีสินค้าในลิสต์
+    if (items.length === 0 || !batchName.trim()) {
+      return alert("พี่ชายช่วยตั้งชื่อรอบและเพิ่มสินค้าก่อนส่งนะครับ");
+    }
+
+    // 2. 🔥 ดักรายการที่ข้อมูลไม่สมบูรณ์ (ชื่อสินค้าว่าง หรือ จำนวนที่กรอกเป็น 0 หรือค่าว่าง)
+    const invalidItems = items.filter(
+      (it) => !it.name.trim() || !it.storeQty || Number(it.storeQty) <= 0
+    );
+
+    if (invalidItems.length > 0) {
+      return alert(
+        `มีรายการสินค้า ${invalidItems.length} รายการที่ยังไม่ได้ใส่ชื่อหรือจำนวน พี่ชายช่วยเช็คหน่อยครับ`
+      );
+    }
+
     setIsSubmitting(true);
 
     const now = new Date();
+    // ใช้รูปแบบวันที่มาตรฐาน YYYY-MM-DD เพื่อให้หลังบ้านนำไปใช้งานหรือจัดเรียงได้ง่ายขึ้น
+    // แต่ส่วนชื่อบิลยังคงใช้แบบไทยตามที่พี่ชายต้องการครับ
     const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear() + 543}`;
     
     const finalBatchName = `${batchName.trim()} (${dateStr})`;
@@ -556,13 +572,15 @@ const submitBatch = async () => {
         body: JSON.stringify({ 
           groupId: customGroupId,
           groupName: finalBatchName,
+          // 🔥 ปรับ Mapping ชื่อ Field ให้เป็นมาตรฐาน (ใช้ camelCase ที่เข้าใจง่าย)
           items: items.map(it => ({
-            productId: it.id,
+            productID: it.id,      // ใช้ ID ตัวใหญ่ตามหน้าสต็อก
             productName: it.name,
             supplier: it.supplier,
             shopQty: Number(it.storeQty),
             stockQty: Number(it.warehouseQty),
-            note: it.note
+            note: it.note,
+            createdAt: now.toISOString() // ส่งเวลาสร้างแบบสากลไปด้วย
           }))
         }),
       });
@@ -574,10 +592,12 @@ const submitBatch = async () => {
         setIsModalOpen(false);
         if (typeof fetchStatus === 'function') fetchStatus();
       } else {
-        alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+        const errorData = await res.json();
+        alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ส่งข้อมูลไม่สำเร็จ'}`);
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับ');
+      console.error("Submit Error:", error);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับพี่ชาย');
     } finally {
       setIsSubmitting(false);
     }
