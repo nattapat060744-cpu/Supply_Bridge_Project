@@ -2,62 +2,53 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import { NextResponse } from 'next/server';
 
-const getDoc = async () => {
-  const auth = new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
-  await doc.loadInfo();
-  return doc;
-};
+export const revalidate = 0; 
 
 export async function GET() {
   try {
-    const doc = await getDoc();
-    let allHistory: any[] = [];
+    const auth = new JWT({
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
 
-    for (let i = 0; i < doc.sheetCount; i++) {
-      const sheet = doc.sheetsByIndex[i];
-      const rows = await sheet.getRows();
+    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
+    await doc.loadInfo();
+    const sheet = doc.sheetsByTitle['Orders'];
+    const rows = await sheet.getRows();
 
-      const sheetData = rows
-        .filter(r => {
-          // ปรับให้เป็นตัวใหญ่และตัดช่องว่างก่อนเช็ค COMPLETED
-          const status = r.get('Status')?.toString().trim().toUpperCase();
-          return status === 'COMPLETED'; 
-        })
-        .map(r => ({
-          rowId: r.rowNumber,
-          sheetName: sheet.title,
-          groupId: r.get('Group_ID'),
-          date: r.get('Created_At'), 
-          recvDate: r.get('Recv_Date'), 
-          productID: r.get('Product_ID'),
-          productName: r.get('Product_Name'),
-          supplier: r.get('Supplier'),
-          orderCarton: r.get('Order_Carton'),
-          cartonUnit: r.get('Carton_Unit'),
-          qtyPerCarton: r.get('Qty_Per_Carton'),
-          innerUnit: r.get('Inner_Unit'),
-          recvCarton: r.get('Recv_Carton'),
-          recvQty: r.get('Recv_Qty'),
-          receiver: r.get('Receiver_Name'),
-          note: r.get('Note_Purchase'),
-          noteStock: r.get('Note_Stock'),
-          // จุดสำคัญ: บังคับให้เป็นตัวใหญ่เสมอ เพื่อให้หน้าบ้านเช็คเงื่อนไขง่ายขึ้น
-          status: r.get('Status')?.toString().trim().toUpperCase()
-        }));
+const data = rows.map(row => {
+  return {
+    rowId: row.rowNumber,
+    status: (row.get('Status') || 'PENDING').toString().trim().toUpperCase(),
+    groupName: row.get('Group_Name') || '',
+    productName: row.get('Product_Name') || '',
+    supplier: row.get('Supplier') || '',
+    orderCarton: row.get('Order_Carton') || '0',
+    cartonUnit: row.get('Carton_Unit') || 'กล่อง',
+    
+    // ✅ จุดที่ต้องเช็ค: ต้องตรงกับหัวตารางใน Excel เป๊ะๆ
+    qtyPerCarton: row.get('Qty_Per_Carton') || '0', 
+    innerUnit: row.get('Inner_Unit') || 'ชิ้น',
+    
+    recvCarton: row.get('Recv_Carton') || '-',
+    recvUnit: row.get('Recv_Unit') || 'กล่อง',
+    recvQty: row.get('Recv_Qty') || '0',
+    recvQtyUnit: row.get('Recv_Qty_Unit') || 'ชิ้น',
+    invoiceNo: row.get('Invoice_No') || '-',
+    receiver: row.get('Receiver_Name') || '-',
+    recvDate: row.get('Recv_Date') || '-',
+    createdAt: row.get('Created_At') || '',
+    
+    // ✅ ดึง Note ให้ครบ 3 แผนก
+    noteRequest: row.get('Note_Request') || '',
+    notePurchase: row.get('Note_Purchase') || '',
+    noteStock: row.get('Note_Stock') || '',
+  };
+}).reverse();
 
-      allHistory = [...allHistory, ...sheetData];
-    }
-
-    // เรียงจากใหม่ไปเก่า
-    allHistory.reverse();
-    return NextResponse.json(allHistory);
+    return NextResponse.json(data);
   } catch (error: any) {
-    console.error("History API Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

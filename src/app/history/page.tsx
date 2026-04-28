@@ -1,223 +1,368 @@
 'use client';
+import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+
+interface HistoryItem {
+  rowId: number;
+  status: string;
+  groupName: string;
+  productName: string;
+  supplier: string;
+  orderCarton: string;
+  qtyPerCarton: string;
+  cartonUnit: string;
+  innerUnit: string;
+  recvCarton: string;
+  recvUnit: string;
+  recvQty: string;
+  recvQtyUnit: string;
+  invoiceNo: string;
+  recvDate?: string;
+  receiver: string;
+  createdAt: string;
+  noteRequest?: string;
+  notePurchase?: string;
+  noteStock?: string;
+}
 
 export default function HistoryPage() {
-  const router = useRouter();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterSupplier, setFilterSupplier] = useState('ALL'); // ✅ เพิ่มตัวกรอง Supplier
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('all'); 
-  const [expandedNotes, setExpandedNotes] = useState<{ [key: string]: boolean }>({});
+  const [sortOrder, setSortOrder] = useState('NEWEST'); // ✅ เพิ่มสถานะการเรียงลำดับ
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20); // ✅ เปลี่ยนเป็น State ให้เลือกได้
 
-  const monthNames = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-  ];
-
-  useEffect(() => {
-    const checkAuthAndFetch = async () => {
-    if (typeof window === 'undefined') return;
-
-    const savedUserStr = localStorage.getItem('user');
-    const lastLoginDate = localStorage.getItem('loginDate');
-    const today = new Date().toLocaleDateString('th-TH');
-
-    if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
-      router.push('/');
-      return;
-    }
-    await fetchHistory();
-  };
-
-  checkAuthAndFetch();
-}, [router]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = () => {
     setLoading(true);
-    try {
-      const res = await fetch('/api/history');
-      const data = await res.json();
-      setItems(data);
-    } catch (err) {
-      console.error('ดึงประวัติไม่สำเร็จครับพี่ชาย');
-    } finally {
-      setLoading(false);
-    }
+    setItems([]);
+    setCurrentPage(1);
+    
+    fetch('/api/history', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        const rawData = Array.isArray(data) ? data : [];
+        const extract = (obj: any, target: string) => {
+          const keys = Object.keys(obj);
+          const cleanTarget = target.replace(/_/g, '').toLowerCase();
+          const foundKey = keys.find(k => k.replace(/_/g, '').toLowerCase() === cleanTarget);
+          return foundKey ? String(obj[foundKey]) : '';
+        };
+
+        const formatted = rawData.map((item, index) => ({
+          rowId: item.rowNumber || item.rowId || index,
+          status: extract(item, 'Status').trim().toUpperCase() || 'PENDING',
+          productName: extract(item, 'Product_Name') || 'ไม่ระบุชื่อ',
+          groupName: extract(item, 'Group_Name') || extract(item, 'Group_ID') || 'ทั่วไป',
+          supplier: extract(item, 'Supplier') || 'ไม่ระบุ Supplier',
+          qtyPerCarton: extract(item, 'Qty_Per_Carton') || '0',
+          innerUnit: extract(item, 'Inner_Unit') || 'ชิ้น',
+          orderCarton: extract(item, 'Order_Carton') || '0',
+          cartonUnit: extract(item, 'Carton_Unit') || 'กล่อง',
+          recvCarton: extract(item, 'Recv_Carton') || '-',
+          recvUnit: extract(item, 'Recv_Unit') || 'กล่อง',
+          recvQty: extract(item, 'Recv_Qty') || '0',
+          recvQtyUnit: extract(item, 'Recv_Qty_Unit') || 'ชิ้น',
+          invoiceNo: extract(item, 'Invoice_No') || '-',
+          recvDate: extract(item, 'Recv_Date') || '-',
+          receiver: extract(item, 'Receiver_Name') || '-',
+          createdAt: extract(item, 'Created_At'),
+          noteRequest: extract(item, 'Note_Request'),
+          notePurchase: extract(item, 'Note_Purchase'),
+          noteStock: extract(item, 'Note_Stock'),
+        }));
+
+        setItems(formatted);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
   };
 
-  const toggleNote = (id: string) => {
-    setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  useEffect(() => { fetchHistory(); }, []);
 
-  const getCleanMonthYear = (dateStr: string) => {
-    if (!dateStr || !dateStr.includes('/')) return 'อื่นๆ';
-    const cleanStr = dateStr.replace(/,/g, '').trim();
-    const parts = cleanStr.split('/');
-    if (parts.length >= 3) {
-      const monthIndex = parseInt(parts[1]) - 1;
-      const year = parts[2].split(' ')[0];
-      const monthName = monthNames[monthIndex] || parts[1];
-      return `${monthName} ${year}`;
-    }
-    return 'อื่นๆ';
-  };
-
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>();
-    items.forEach(item => {
-      const monthYear = getCleanMonthYear(item.date);
-      if (monthYear !== 'อื่นๆ') months.add(monthYear);
-    });
-    return Array.from(months);
+  // ✅ ดึงรายชื่อ Supplier ทั้งหมดออกมาทำ Dropdown (ไม่ซ้ำกัน)
+  const supplierList = useMemo(() => {
+    const list = Array.from(new Set(items.map(item => item.supplier))).filter(Boolean);
+    return list.sort((a, b) => a.localeCompare(b, 'th'));
   }, [items]);
 
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = 
-        item.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.productID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.groupId?.toLowerCase().includes(searchTerm.toLowerCase());
-      const itemMonth = getCleanMonthYear(item.date);
-      const matchesMonth = selectedMonth === 'all' || itemMonth === selectedMonth;
-      return matchesSearch && matchesMonth;
+  // ✅ 1. กรองข้อมูล (Filter) และ เรียงลำดับ (Sort)
+  const filteredAndSortedItems = useMemo(() => {
+    let result = items.filter(item => {
+      const currentStatus = (item.status === 'REJECT' || item.status === 'REJECTED') ? 'REJECTED' : item.status;
+      const matchesStatus = filterStatus === 'ALL' || currentStatus === filterStatus;
+      const matchesSupplier = filterSupplier === 'ALL' || item.supplier === filterSupplier;
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = item.productName.toLowerCase().includes(search) || 
+                            item.groupName.toLowerCase().includes(search) ||
+                            item.supplier.toLowerCase().includes(search);
+      
+      return matchesStatus && matchesSupplier && matchesSearch;
     });
-  }, [items, searchTerm, selectedMonth]);
 
-  const groupedData = useMemo(() => {
-    const groups: { [month: string]: { [groupId: string]: any[] } } = {};
-    filteredItems.forEach(item => {
-      const monthYear = getCleanMonthYear(item.date);
-      const gId = item.groupId || 'ไม่มีชื่อบิล';
-      if (!groups[monthYear]) groups[monthYear] = {};
-      if (!groups[monthYear][gId]) groups[monthYear][gId] = [];
-      groups[monthYear][gId].push(item);
+    // เรียงลำดับข้อมูล
+    return result.sort((a, b) => {
+      if (sortOrder === 'NEWEST') return b.rowId - a.rowId; // ใหม่ไปเก่า (ใช้ rowId อ้างอิง)
+      if (sortOrder === 'OLDEST') return a.rowId - b.rowId; // เก่าไปใหม่
+      if (sortOrder === 'NAME_ASC') return a.productName.localeCompare(b.productName, 'th'); // ก-ฮ
+      if (sortOrder === 'NAME_DESC') return b.productName.localeCompare(a.productName, 'th'); // ฮ-ก
+      return 0;
     });
-    return groups;
-  }, [filteredItems]);
+  }, [items, filterStatus, filterSupplier, searchTerm, sortOrder]);
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-black italic text-slate-400 animate-pulse uppercase tracking-[0.3em]">
-      Loading History Data...
-    </div>
-  );
+  // ✅ 2. แบ่งหน้าแสดงผล (Pagination)
+  const totalPages = Math.ceil(filteredAndSortedItems.length / itemsPerPage);
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedItems.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredAndSortedItems, currentPage, itemsPerPage]);
 
-  return (
-    <div className="max-w-400 mx-auto p-4 md:p-10 bg-slate-50 min-h-screen">
-      <div className="mb-10 bg-white p-8 md:p-12 rounded-[40px] shadow-sm border-b-8 border-emerald-600 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div>
-          <span className="text-[12px] font-black text-emerald-600 uppercase tracking-[0.4em] mb-3 block italic">Internal Purchasing Logs</span>
-          <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-none">
-            ประวัติ <span className="text-emerald-600 not-italic">การรับของ</span>
-          </h1>
-        </div>
-        <button onClick={fetchHistory} className="bg-emerald-600 text-white px-10 py-5 rounded-3xl font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-lg active:scale-95">
-          Refresh Data
-        </button>
-      </div>
+  // รีเซ็ตหน้าเมื่อมีการเปลี่ยนการกรอง
+  useEffect(() => { setCurrentPage(1); }, [filterStatus, filterSupplier, searchTerm, itemsPerPage, sortOrder]);
 
-      <div className="mb-10 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl opacity-40">🔍</span>
-          <input 
-            type="text"
-            placeholder="ค้นหาบิล, ชื่อสินค้า หรือ รหัส..."
-            className="w-full bg-white border-2 border-slate-100 p-6 pl-16 rounded-3xl font-bold outline-none focus:border-emerald-500 shadow-sm transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="md:w-72 relative">
-          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl opacity-40">📅</span>
-          <select 
-            className="w-full bg-white border-2 border-slate-100 p-6 pl-16 rounded-3xl font-bold outline-none focus:border-emerald-500 shadow-sm appearance-none"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          >
-            <option value="all">แสดงทุกเดือน</option>
-            {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
-      </div>
+ return (
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans text-slate-900">
+      <div className="max-w-[1650px] mx-auto">
+        
+        {/* แผงควบคุม Filter & Sort */}
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 mb-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex items-center gap-4">
+              <h1 className="text-4xl font-black uppercase italic tracking-tighter">📜 History</h1>
+              <button onClick={fetchHistory} className="bg-slate-100 p-2 rounded-full hover:rotate-180 transition-all duration-500 shadow-inner">🔄</button>
+            </div>
 
-      {Object.keys(groupedData).length > 0 ? (
-        Object.keys(groupedData).map((month) => (
-          <div key={month} className="mb-20">
-            <h2 className="text-3xl font-black text-slate-800 uppercase italic mb-8 border-l-8 border-slate-800 pl-6">{month}</h2>
-            <div className="space-y-10">
-              {Object.keys(groupedData[month]).map((batchId) => (
-                <div key={batchId} className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="bg-slate-100 px-8 py-4 border-b border-slate-200 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <span className="bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase italic">BILL GROUP</span>
-                        <h3 className="text-lg font-black text-slate-800 uppercase italic tracking-tighter">{batchId}</h3>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-287.5 table-fixed">
-                      <thead className="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-widest italic border-b border-slate-100">
-                        <tr>
-                          <th className="p-6 w-40">วันที่บันทึก</th>
-                          <th className="p-6 w-75">รายการสินค้า</th>
-                          <th className="p-6 w-32.5">ยอดสั่งซื้อ</th>
-                          <th className="p-6 w-32.5 bg-emerald-50/50">ยอดรับจริง</th>
-                          <th className="p-6 w-55">หมายเหตุ</th>
-                          <th className="p-6 w-45">วันรับของ / ผู้รับ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {groupedData[month][batchId].map((item, idx) => {
-                          const hasMismatch = Number(item.orderCarton) !== Number(item.recvCarton) || Number(item.qtyPerCarton) !== Number(item.recvQty);
-                          const rowKey = `${month}-${batchId}-${idx}`;
-                          return (
-                            <tr key={idx} className={`hover:bg-slate-50 transition-colors ${hasMismatch ? 'border-l-8 border-red-500' : 'border-l-8 border-emerald-500'}`}>
-                              <td className="p-6 text-[11px] font-bold text-slate-500">{item.date?.replace(/,/g, '') || '-'}</td>
-                              <td className="p-6">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{item.productID}</p>
-                                <p className="font-black text-slate-800 uppercase text-sm truncate">{item.productName}</p>
-                              </td>
-                              <td className="p-6">
-                                <div className="space-y-1">
-                                  <p className="text-xs font-black text-slate-600">{item.orderCarton} {item.cartonUnit}</p>
-                                  <p className="text-[10px] font-bold text-slate-400 italic">บ: {item.qtyPerCarton} {item.innerUnit}</p>
-                                </div>
-                              </td>
-                              <td className="p-6 bg-emerald-50/20">
-                                <div className="space-y-1">
-                                  <p className={`text-xs font-black ${Number(item.orderCarton) !== Number(item.recvCarton) ? "text-red-600" : "text-emerald-600"}`}>
-                                    {item.recvCarton || 0} {item.cartonUnit}
-                                  </p>
-                                  <p className="text-[10px] font-bold text-slate-500 italic">บ: {item.recvQty || 0} {item.innerUnit}</p>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="space-y-1.5 cursor-pointer" onClick={() => toggleNote(rowKey)}>
-                                  {item.note && <p className={`text-[10px] font-bold text-amber-600 italic leading-tight ${expandedNotes[rowKey] ? '' : 'truncate'}`}>🛒 {item.note}</p>}
-                                  {item.noteStock && <p className={`text-[10px] font-bold text-blue-600 italic leading-tight ${expandedNotes[rowKey] ? '' : 'truncate'}`}>📦 {item.noteStock}</p>}
-                                  {!item.note && !item.noteStock && <span className="text-slate-200">-</span>}
-                                </div>
-                              </td>
-                              <td className="p-6">
-                                <p className="font-black text-[13px] text-slate-900 leading-none">{item.recvDate || '-'}</p>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">โดย: {item.receiver || '-'}</p>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 w-full lg:max-w-5xl">
+              {/* ค้นหา */}
+              <input 
+                type="text" placeholder="ค้นหาชื่อสินค้า/กลุ่ม/Supplier..." value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none focus:border-blue-600 transition-all"
+              />
+
+              {/* เลือก Supplier */}
+              <select 
+                value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}
+                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer"
+              >
+                <option value="ALL">ทุก Supplier</option>
+                {supplierList.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+
+              {/* เรียงลำดับ */}
+              <select 
+                value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}
+                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer"
+              >
+                <option value="NEWEST">ล่าสุด → เก่าสุด</option>
+                <option value="OLDEST">เก่าสุด → ล่าสุด</option>
+                <option value="NAME_ASC">ชื่อสินค้า (ก-ฮ)</option>
+                <option value="NAME_DESC">ชื่อสินค้า (ฮ-ก)</option>
+              </select>
+
+              {/* จำนวนต่อหน้า */}
+              <div className="flex items-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase">Show:</span>
+                <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="bg-transparent font-black text-sm outline-none w-full">
+                  <option value={20}>20 แถว</option>
+                  <option value={50}>50 แถว</option>
+                  <option value={100}>100 แถว</option>
+                  <option value={500}>500 แถว</option>
+                </select>
+              </div>
             </div>
           </div>
-        ))
-      ) : (
-        <div className="bg-white p-20 rounded-[40px] text-center shadow-sm">
-           <p className="text-slate-400 font-black uppercase italic tracking-widest text-xl">ไม่พบข้อมูลครับพี่ชาย ❌</p>
         </div>
-      )}
-    </div>
+        
+        
+        {/* แถบ Filter สถานะ */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+          {['ALL', 'PENDING', 'ORDERED', 'COMPLETED', 'REJECTED'].map(s => (
+            <button
+              key={s} onClick={() => setFilterStatus(s)}
+              className={`px-6 py-2 rounded-full font-black text-[11px] tracking-widest transition-all ${
+                filterStatus === s ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'
+              }`}
+            >
+              {s}
+            </button>
+            
+          ))}
+        </div>
+
+        {/* ตารางข้อมูล */}
+        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.3em]">กำลังดึงข้อมูลล่าสุด... 🚀</div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-[0.2em] border-b">
+                  <tr>
+                    <th className="p-6 whitespace-nowrap">ข้อมูลบิล</th>
+                    <th className="p-6 w-1/3">รายการสินค้า/Supplier</th>
+                    <th className="p-6 text-center whitespace-nowrap">หมายเหตุ</th>
+                    <th className="p-6 text-center whitespace-nowrap">จำนวนสั่ง</th>
+                    <th className="p-6 text-center whitespace-nowrap">จำนวนรับ</th>
+                    <th className="p-6 text-center whitespace-nowrap">ข้อมูลการรับ</th>
+                    <th className="p-6 text-center">สถานะ</th>
+                  </tr>
+                </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {paginatedItems.map((item, idx) => (
+                      <tr key={`${item.rowId}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                        {/* 1. ข้อมูลบิลและวันที่สั่ง */}
+                        <td className="p-6 align-top">
+                          <div className="font-black text-slate-900 mb-1">{item.createdAt}</div>
+                          <div className="text-[10px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-md inline-block">{item.groupName}</div>
+                        </td>
+
+                        {/* 2. รายการสินค้า */}
+                        <td className="p-6 align-top">
+                          <div className="font-bold text-slate-800 text-base mb-1">{item.productName}</div>
+                          <div className="text-[11px] text-slate-400 font-bold italic">{item.supplier}</div>
+                        </td>
+
+                        {/* 3. หมายเหตุ (แสดงครบทุกแผนก) */}
+                        <td className="p-6 align-top">
+                          <div className="flex flex-col gap-2">
+                            {item.noteRequest && item.noteRequest !== '-' && (
+                              <div className="text-[10px] bg-amber-50 text-amber-700 p-2 rounded-lg border-l-2 border-amber-400 font-bold">
+                                <span className="text-[9px] opacity-60 block uppercase">Sorting:</span>
+                                {item.noteRequest}
+                              </div>
+                            )}
+                            {item.notePurchase && item.notePurchase !== '-' && (
+                              <div className="text-[10px] bg-blue-50 text-blue-700 p-2 rounded-lg border-l-2 border-blue-400 font-bold">
+                                <span className="text-[9px] opacity-60 block uppercase">Purchasing:</span>
+                                {item.notePurchase}
+                              </div>
+                            )}
+                            {item.noteStock && item.noteStock !== '-' && (
+                              <div className="text-[10px] bg-emerald-50 text-emerald-700 p-2 rounded-lg border-l-2 border-emerald-400 font-bold">
+                                <span className="text-[9px] opacity-60 block uppercase">Stock:</span>
+                                {item.noteStock}
+                              </div>
+                            )}
+                            {(!item.noteRequest || item.noteRequest === '-') && 
+                            (!item.notePurchase || item.notePurchase === '-') && 
+                            (!item.noteStock || item.noteStock === '-') && (
+                              <span className="text-slate-300 text-[10px] italic">- ไม่มีหมายเหตุ -</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 4. ช่องสั่งซื้อ (เน้นจำนวนสั่ง) */}
+                        <td className="p-6 text-center bg-slate-50/50 align-top">
+                          <div className="flex flex-col items-center">
+                            <p className="text-2xl font-black text-slate-900 tracking-tighter">
+                              {item.orderCarton} <span className="text-[10px] text-slate-400 uppercase">{item.cartonUnit}</span>
+                            </p>
+                            <div className="w-12 h-0.5 bg-slate-200 my-1"></div>
+                            <p className="text-[10px] font-bold text-slate-500">
+                              บรรจุ {item.qtyPerCarton} {item.innerUnit}
+                            </p>
+                          </div>
+                        </td>
+
+                        {/* 5. ช่องจำนวนรับ (เน้นยอดรับจริง) */}
+                        <td className="p-6 text-center bg-slate-50/50 align-top">
+                          <div className="flex flex-col items-center">
+                            <p className="text-2xl font-black text-slate-900 tracking-tighter">
+                              {item.recvCarton} <span className="text-[10px] text-slate-400 uppercase">{item.recvUnit}</span>
+                            </p>
+                            <div className="w-12 h-0.5 bg-slate-200 my-1"></div>
+                            <p className="text-[10px] font-bold text-slate-500">
+                              บรรจุ {item.recvQty} {item.recvQtyUnit}
+                            </p>
+                          </div>
+                        </td>
+
+                        {/* 6. ช่องข้อมูลการรับ (แยกออกมาให้ดูง่ายตามที่พี่ชายบอก) */}
+                        <td className="p-6 align-top bg-slate-50/30">
+                          <div className="space-y-2">
+                            {/* ชื่อคนรับของ */}
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">ผู้รับของ</span>
+                              <span className="text-xs font-black text-slate-700">{item.receiver || '-'}</span>
+                            </div>
+                            {/* วันที่รับของ (ถ้ามีแยกใน DB) หรือ เลขบิล */}
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">เลขที่บิล / INV</span>
+                              <span className="text-[11px] font-bold text-blue-600">{item.recvDate !== '-' ? item.invoiceNo : 'ยังไม่ระบุ'}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 7. สถานะ */}
+                        <td className="p-6 text-center align-top">
+                          <div className={`px-3 py-1 rounded-full text-[10px] font-black shadow-sm inline-block ${
+                            item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' :
+                            item.status === 'ORDERED' ? 'bg-blue-600 text-white' : 
+                            item.status === 'REJECTED' || item.status === 'REJECT' ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-900'
+                          }`}>
+                            {item.status}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Pagination Controls */}
+        {!loading && totalPages > 1 && (
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pb-10">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              หน้า {currentPage} / {totalPages} (ทั้งหมด {filteredAndSortedItems.length} รายการ)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
+                  currentPage === 1 ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
+                }`}
+              >←</button>
+              
+              <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
+                {[...Array(totalPages)].map((_, i) => {
+                  const pageNum = i + 1;
+                  if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${
+                          currentPage === pageNum ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >{pageNum}</button>
+                    );
+                  }
+                  if (pageNum === currentPage - 2 || pageNum === currentPage + 2) return <span key={pageNum} className="text-slate-300">...</span>;
+                  return null;
+                })}
+              </div>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
+                  currentPage === totalPages ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
+                }`}
+              >→</button>
+            </div>
+          </div>
+           )}
+          </div>
+        </div>
   );
 }
