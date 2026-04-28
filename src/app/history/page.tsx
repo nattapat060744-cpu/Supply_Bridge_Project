@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 interface HistoryItem {
   rowId: number;
   status: string;
-  groupName: string;
+  groupId: string;
   productName: string;
   supplier: string;
   orderCarton: string;
@@ -56,7 +56,7 @@ export default function HistoryPage() {
           rowId: item.rowNumber || item.rowId || index,
           status: extract(item, 'Status').trim().toUpperCase() || 'PENDING',
           productName: extract(item, 'Product_Name') || 'ไม่ระบุชื่อ',
-          groupName: extract(item, 'Group_Name') || extract(item, 'Group_ID') || 'ทั่วไป',
+          groupId: extract(item, 'Group_ID') || extract(item, 'Group_ID') || 'ทั่วไป',
           supplier: extract(item, 'Supplier') || 'ไม่ระบุ Supplier',
           qtyPerCarton: extract(item, 'Qty_Per_Carton') || '0',
           innerUnit: extract(item, 'Inner_Unit') || 'ชิ้น',
@@ -100,7 +100,7 @@ export default function HistoryPage() {
       const matchesSupplier = filterSupplier === 'ALL' || item.supplier === filterSupplier;
       const search = searchTerm.toLowerCase();
       const matchesSearch = item.productName.toLowerCase().includes(search) || 
-                            item.groupName.toLowerCase().includes(search) ||
+                            item.groupId.toLowerCase().includes(search) ||
                             item.supplier.toLowerCase().includes(search);
       
       return matchesStatus && matchesSupplier && matchesSearch;
@@ -220,7 +220,7 @@ export default function HistoryPage() {
                         {/* 1. ข้อมูลบิลและวันที่สั่ง */}
                         <td className="p-6 align-top">
                           <div className="font-black text-slate-900 mb-1">{item.createdAt}</div>
-                          <div className="text-[10px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-md inline-block">{item.groupName}</div>
+                          <div className="text-[10px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-md inline-block">{item.groupId}</div>
                         </td>
 
                         {/* 2. รายการสินค้า */}

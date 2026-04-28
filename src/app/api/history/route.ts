@@ -21,7 +21,7 @@ const data = rows.map(row => {
   return {
     rowId: row.rowNumber,
     status: (row.get('Status') || 'PENDING').toString().trim().toUpperCase(),
-    groupName: row.get('Group_Name') || '',
+    groupName: row.get('Group_ID') || '',
     productName: row.get('Product_Name') || '',
     supplier: row.get('Supplier') || '',
     orderCarton: row.get('Order_Carton') || '0',
