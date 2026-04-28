@@ -128,10 +128,10 @@ export default function HistoryPage() {
 
  return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans text-slate-900">
-      <div className="max-w-[1650px] mx-auto">
+      <div className="max-w-412.5 mx-auto">
         
         {/* แผงควบคุม Filter & Sort */}
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 mb-8">
+        <div className="bg-white p-6 rounded-4xl shadow-sm border border-slate-200 mb-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex items-center gap-4">
               <h1 className="text-4xl font-black uppercase italic tracking-tighter">📜 History</h1>
@@ -197,7 +197,7 @@ export default function HistoryPage() {
         </div>
 
         {/* ตารางข้อมูล */}
-        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden mb-6">
+        <div className="bg-white rounded-4xl shadow-xl border border-slate-100 overflow-hidden mb-6">
           <div className="overflow-x-auto">
             {loading ? (
               <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.3em]">กำลังดึงข้อมูลล่าสุด... 🚀</div>
