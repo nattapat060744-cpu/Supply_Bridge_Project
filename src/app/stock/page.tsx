@@ -765,6 +765,50 @@ const handleConfirmImport = async () => {
     }
   };
 
+  const handleForceComplete = async (item: StockItem) => {
+    const confirmClose = window.confirm(`ยืนยันจะ "ตัดบิล" รายการนี้เลยใช่ไหมครับ? \nระบบจะถือว่ายอดที่รับไปแล้วคือยอดที่ถูกต้อง และปิดรายการนี้ทันที`);
+    
+    if (!confirmClose) return;
+
+    setIsSubmitting(true);
+    try {
+      const now = new Date();
+      // ใช้ Format วันที่และเวลาที่อ่านง่ายสำหรับลง Sheets
+      const thaiDate = now.toLocaleString('th-TH', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+
+      // 🔥 ส่งข้อมูลไปที่ API PATCH
+      await fetch('/api/stock', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rowId: item.rowId,
+          productID: item.productID,
+          receiver: receiverName || 'คลังสินค้า (ตัดบิลจบ)', 
+          recvCarton: item.recvCarton || 0,
+          Recv_Qty: item.Recv_Qty || 0,
+          invoiceNo: item.invoiceNo || '', 
+          status: 'COMPLETED', 
+          // ปรับ Note ให้ชัดเจน
+          Note_Stock: `${item.Note_Stock || ''} [ตัดบิลจบรายการโดยคลังสินค้า]`.trim(),
+          Recv_Date: thaiDate
+        }),
+      });
+
+      alert('ตัดบิลเรียบร้อย! รายการนี้จะหายไปจากหน้าจอครับ');
+      
+      // รีโหลดข้อมูลใหม่ทันทีเพื่อให้รายการที่ COMPLETED แล้วหายไปจากหน้าจอ (เพราะ GET กรองออกแล้ว)
+      await fetchOrderedItems(); 
+    } catch (err) {
+      console.error("Force Complete Error:", err);
+      alert('ตัดบิลไม่สำเร็จครับพี่ชาย');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
       <div className="max-w-6xl mx-auto p-4 md:p-10">
         {/* ส่วนหัวข้อหลัก */}
@@ -873,26 +917,24 @@ const handleConfirmImport = async () => {
 
       </div>
             
-      {/* ส่วน Discrepancy Items (คงเดิมแต่ปรับ Padding ให้รับกับส่วนอื่น) */}
+{/* ส่วน Discrepancy Items (คงเดิมแต่ปรับ Padding ให้รับกับส่วนอื่น) */}
       {discrepancyItems.length > 0 && (
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4 px-2">
             <h2 className="text-[12px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
               <span className="w-2 h-5 bg-red-500 rounded-full"></span>
-              แจ้งเตือนรายการที่มีปัญหา ({Array.from(new Set(discrepancyItems.map(item => item.productID))).length})
+              {/* 🔥 ปรับ Filter ตรงการนับจำนวนเลข ID */}
+              แจ้งเตือนรายการที่มีปัญหา ({Array.from(new Set(discrepancyItems.filter(item => !item.Note_Stock?.includes('ตัดบิลจบ')).map(item => item.productID))).length})
             </h2>
           </div>
           
           <div className="flex gap-4 overflow-x-auto pb-6 custom-scrollbar-h snap-x">
             {discrepancyItems
+              // 🔥 [จุดที่เพิ่ม] กรองรายการที่ตัดบิลแล้วออกไป (ถ้ามีคำว่า "ตัดบิลจบ" ใน Note จะไม่โชว์ที่นี่)
+              .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
               .filter((item, index, self) => index === self.findIndex((t) => (t.productID === item.productID)))
               .map((item, idx) => {
-                // คู่ที่ 1: ลัง เทียบ ลัง
                 const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
-                
-                // คู่ที่ 2: บรรจุ/ลัง เทียบ รับจริง(ชิ้น)
-                // (ถ้าคีย์รับจริงมา 10 แต่ในระบบบอกบรรจุ 10 ผลลัพธ์จะเป็น 0 = ไม่โชว์ส่วนต่าง)
-                // (ถ้าคีย์รับจริงมา 8 แต่ในระบบบอกบรรจุ 10 ผลลัพธ์จะเป็น -2 = โชว์ว่าขาด 2)
                 const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
 
                 return (
@@ -905,14 +947,11 @@ const handleConfirmImport = async () => {
                             {item.supplier}
                           </span>
                         )}
-                        {/* แจ้งเตือนคู่ที่ 1 (ลัง) */}
                         {diffCarton !== 0 && (
                           <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
                             {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
                           </span>
                         )}
-                        
-                        {/* แจ้งเตือนคู่ที่ 2 (ชิ้น) */}
                         {diffInner !== 0 && (
                           <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
                             {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
@@ -934,15 +973,27 @@ const handleConfirmImport = async () => {
                       <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
                         <span className="text-slate-400">ตรวจรับจริง:</span>
                         <div className="flex flex-col items-end">
-                           <span className="text-red-600 italic font-black">{item.recvCarton} {item.cartonUnit}</span>
-                           <span className="text-red-600 italic font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
+                            <span className="text-red-600 italic font-black">{item.recvCarton} {item.cartonUnit}</span>
+                            <span className="text-red-600 italic font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
                         </div>
                       </div>
                     </div>
 
-                    <button onClick={() => setUpdatingItem(item)} className="w-full bg-slate-950 text-yellow-400 text-[11px] font-black py-4 rounded-2xl hover:bg-yellow-400 hover:text-slate-950 transition-all shadow-lg uppercase">
-                      แก้ไข / รับเพิ่ม
-                    </button>
+                    {/* ปรับปรุงส่วนปุ่มด้านล่าง */}
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setUpdatingItem(item)} 
+                        className="flex-2 bg-slate-950 text-yellow-400 text-[11px] font-black py-4 rounded-2xl hover:bg-yellow-400 hover:text-slate-950 transition-all shadow-lg uppercase"
+                      >
+                        แก้ไข / รับเพิ่ม
+                      </button>
+                      <button 
+                        onClick={() => handleForceComplete(item)} 
+                        className="flex-1 bg-red-50 text-red-500 text-[11px] font-black py-4 rounded-2xl hover:bg-red-500 hover:text-white transition-all border border-red-100 uppercase"
+                      >
+                        ตัดบิล
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1029,7 +1080,7 @@ const handleConfirmImport = async () => {
                                     <div className="text-right px-8 border-r-2 border-slate-100">
                                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1 italic">ยอดบิลนี้</p>
                                       <p className="text-xl font-black text-slate-900">{batch.orderCarton} {batch.cartonUnit}</p>
-                                      <p className="text-[11px] font-bold text-amber-600">บรรจุ:  {bInnerQty.toLocaleString()} {productInfo.innerUnit}</p>
+                                      <p className="text-[11px] font-bold text-amber-600">บรรจุ: {productInfo.qtyPerCarton} {productInfo.innerUnit}</p>
                                     </div>
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); setSelectedBatch([batch]); }}

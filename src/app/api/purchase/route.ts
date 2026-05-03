@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 export const revalidate = 0;
 
-// --- ส่วน GET คงเดิมไว้ทั้งหมด ---
+// --- ส่วน GET: เพิ่ม Note_Stock ในการดึงข้อมูล ---
 export async function GET() {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) {
@@ -43,7 +43,7 @@ export async function GET() {
       })
       .map(r => ({
         id: r.rowNumber.toString(),
-        batchId: r.get('Group_ID') || '', // อันนี้เก็บเลข ID ไว้ใช้หลังบ้าน (ไม่ต้องโชว์)
+        batchId: r.get('Group_ID') || '',
         batchName: r.get('Group_Name') || 'ไม่มีชื่อบิล',
         productId: r.get('Product_ID') || '',
         name: r.get('Product_Name') || 'ไม่มีชื่อสินค้า',
@@ -61,6 +61,7 @@ export async function GET() {
         innerUnit: r.get('Inner_Unit') || 'ชิ้น',
         notePur: r.get('Note_Purchase') || '',
         Note_Request: r.get('Note_Request') || '',
+        Note_Stock: r.get('Note_Stock') || '', // ✅ เพิ่มการดึงค่า Note_Stock
         Created_At: r.get('Created_At') || '',
         Created_At_P: r.get('Created_At_P') || '',
       }));
@@ -71,7 +72,7 @@ export async function GET() {
   }
 }
 
-// --- ส่วน POST: ปรับชื่อบิลและเวลาสร้าง ---
+// --- ส่วน POST: เพิ่ม Note_Stock ตอนบันทึกแถวใหม่ ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -87,7 +88,6 @@ export async function POST(req: Request) {
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
 
-    // ✅ ชื่อกลุ่มเอาตามที่ส่งมาเพียวๆ (ไม่เติม Date.now ต่อท้ายใน Group_Name)
     const groupId = incomingGroupId || `ID-${Date.now()}`;
     
     for (const item of items) {
@@ -101,8 +101,9 @@ export async function POST(req: Request) {
         'Shop_Qty': item.storeQty || item.Shop_Qty || '0',
         'Stock_Qty': item.warehouseQty || item.Stock_Qty || '0',
         'Note_Request': item.note || item.Note_Request || '-',
-        'Created_At': Created_At || new Date().toLocaleString('th-TH'), // ✅ เวลาสร้างบิล
-        'Created_At_P': '', // ✅ เว้นว่างไว้ก่อนจนกว่าจะมีการกด Order (PATCH)
+        'Note_Stock': item.Note_Stock || '', // ✅ เพิ่มการบันทึก Note_Stock
+        'Created_At': Created_At || new Date().toLocaleString('th-TH'),
+        'Created_At_P': '', 
         'Order_Carton': item.orderCarton || '0',
         'Carton_Unit': item.cartonUnit || 'ลัง',
         'Qty_Per_Carton': item.qtyPerCarton || '0',
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
   }
 }
 
-// --- ส่วน PATCH: อัปเดตเวลาสั่งซื้อจริง ---
+// --- ส่วน PATCH: เพิ่มการอัปเดต Note_Stock ---
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
@@ -146,8 +147,8 @@ export async function PATCH(req: Request) {
         row.set('Note_Purchase', item.purchaseNote || '');
         row.set('Purchase_Qty', Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0));
         row.set('Note_Request', item.noteRequest || '');
+        row.set('Note_Stock', item.Note_Stock || ''); // ✅ เพิ่มการอัปเดต Note_Stock
         
-        // ✅ อัปเดตเวลาที่สั่งซื้อจริงลง Created_At_P เท่านั้น
         if (item.Created_At_P) {
           row.set('Created_At_P', item.Created_At_P);
         }

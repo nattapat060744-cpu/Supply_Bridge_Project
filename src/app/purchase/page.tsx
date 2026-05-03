@@ -27,6 +27,7 @@ interface OrderItem {
   notePurchase?: string;
   isRejected?: boolean;
   status?: string;
+  Note_Stock?: string;
   recvCarton?: string;
   Recv_Qty?: string;
   rowId?: string;
@@ -235,25 +236,36 @@ const handleFinalConfirm = async () => {
 
     setIsSubmitting(true);
     try {
-      // ✅ สร้างเวลาปัจจุบันตอน "กดยืนยันสั่งของ"
       const confirmedAt = new Date().toLocaleString('th-TH', {
         year: 'numeric', month: 'numeric', day: 'numeric',
         hour: 'numeric', minute: 'numeric', second: 'numeric',
         hour12: false
       });
 
-      const itemsToSubmit = reviewItems.map(item => ({
-        id: item.id || (item as any).ID || (item as any).rowNumber, 
-        status: item.isRejected ? 'REJECTED' : 'ORDERED',
-        orderCarton: item.orderCarton,
-        cartonUnit: item.cartonUnit,
-        qtyPerCarton: item.qtyPerCarton,
-        innerUnit: item.innerUnit,
-        purchaseNote: item.notePurchase,
-        purchaseQty: Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0),
-        // ✅ ลงเวลาที่ช่อง Created_At_P สำหรับการสั่งซื้อจริง
-        Created_At_P: confirmedAt 
-      }));
+      const itemsToSubmit = reviewItems.map(item => {
+        // 🔍 1. เช็คสถานะให้ชัวร์: 
+        // ถ้าพี่กดปุ่ม "ไม่สั่ง" (isRejected === true) ให้เป็น REJECTED
+        // ถ้าสถานะเดิมใน DB เป็น REJECTED อยู่แล้ว และพี่ไม่ได้กดแก้ ก็ให้คงไว้
+        let finalStatus = item.isRejected ? 'REJECTED' : 'ORDERED';
+        
+        // กรณีพิเศษ: ถ้าเป็นรายการที่เคย Reject ไปแล้ว (ป้องกันสถานะเด้งกลับ)
+        if (item.status === 'REJECTED' && !item.isRejected) {
+           // ถ้าของเดิมคือ Rejected แต่พี่ไม่ได้กด Toggle กลับมา ระบบจะกันเหนียวให้เป็น Rejected เหมือนเดิม
+           finalStatus = 'REJECTED';
+        }
+
+        return {
+          id: item.id || (item as any).ID || (item as any).rowNumber, 
+          status: finalStatus, 
+          orderCarton: item.orderCarton,
+          cartonUnit: item.cartonUnit,
+          qtyPerCarton: item.qtyPerCarton,
+          innerUnit: item.innerUnit,
+          purchaseNote: item.notePurchase,
+          purchaseQty: Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0),
+          Created_At_P: confirmedAt 
+        };
+      });
 
       const res = await fetch('/api/purchase', {
         method: 'PATCH',
@@ -265,7 +277,7 @@ const handleFinalConfirm = async () => {
       });
 
       if (res.ok) {
-        alert('🚀 บันทึกเรียบร้อย!');
+        alert('🚀 บันทึกเรียบร้อย! แยกสถานะ ORDERED และ REJECTED ชัดเจนครับ');
         setReviewBatch(null);
         fetchPendingOrders();
       } else {
@@ -342,60 +354,60 @@ const handleFinalConfirm = async () => {
   };
 
   const submitBatch = async () => {
-      if (isSubmitting) return;
-      if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
-      if (items.length === 0) return alert('ไม่มีรายการสินค้าในบิลครับ');
+        if (isSubmitting) return;
+        if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+        if (items.length === 0) return alert('ไม่มีรายการสินค้าในบิลครับ');
 
-      setIsSubmitting(true);
-      try {
-        const now = new Date();
-        
-        // ✅ 1. วันที่สำหรับใส่ในชื่อบิล (เช่น 02/05/2569)
-        const displayDate = now.toLocaleDateString('th-TH', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        });
+        setIsSubmitting(true);
+        try {
+          const now = new Date();
+          
+          // ✅ 1. วันที่สำหรับใส่ในชื่อบิล (เช่น 02/05/2569)
+          const displayDate = now.toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
 
-        // ✅ 2. เวลาสำหรับลงช่อง Created_At
-        const thaiTimestamp = now.toLocaleString('th-TH', {
-          year: 'numeric', month: 'numeric', day: 'numeric',
-          hour: 'numeric', minute: 'numeric', second: 'numeric',
-          hour12: false
-        });
+          // ✅ 2. เวลาสำหรับลงช่อง Created_At
+          const thaiTimestamp = now.toLocaleString('th-TH', {
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: 'numeric', second: 'numeric',
+            hour12: false
+          });
 
-        // ✅ 3. ชื่อบิล: เอาแค่ชื่อ + วันที่พอ (ไม่มีเลขแปลกๆ ต่อท้ายแล้ว)
-        const finalBatchName = `${batchName.trim()} (${displayDate})`;
+          // ✅ 3. ชื่อบิล: เอาแค่ชื่อ + วันที่พอ (ไม่มีเลขแปลกๆ ต่อท้ายแล้ว)
+          const finalBatchName = `${batchName.trim()} (${displayDate})`;
 
-        const res = await fetch('/api/purchase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            groupName: finalBatchName,
-            items: items,
-            Created_At: thaiTimestamp, // ลงเวลาสร้างบิล
-            // groupId ใช้ข้างหลังระบบเฉยๆ ไม่เกี่ยวกับชื่อที่พี่เห็น
-            groupId: `${finalBatchName.replace(/\s+/g, '_')}_${Date.now()}` 
-          }),
-        });
+          const res = await fetch('/api/purchase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              groupName: finalBatchName, // 👈 ส่งชื่อสะอาดๆ ไปโชว์ (ไม่มีตัวเลขยาวๆ)
+              items: items,
+              Created_At: thaiTimestamp, 
+              // 💡 ตรงนี้ยังต้องมี Date.now() ไว้เพื่อให้ระบบหลังบ้านไม่สับสนถ้าพี่ตั้งชื่อซ้ำกันเป๊ะๆ
+              groupId: `${batchName.trim().replace(/\s+/g, '_')}_${Date.now()}` 
+            }),
+          });
 
-        if (res.ok) {
-          alert(`🚀 สร้างบิล "${finalBatchName}" เรียบร้อย!`);
-          setBatchName(''); 
-          setItems([]); 
-          setIsModalOpen(false); 
-          fetchPendingOrders();
-        } else {
-          const errorData = await res.json();
-          alert(`❌ เกิดข้อผิดพลาด: ${errorData.message || 'บันทึกไม่สำเร็จ'}`);
+          if (res.ok) {
+            alert(`🚀 สร้างบิล "${finalBatchName}" เรียบร้อย!`);
+            setBatchName(''); 
+            setItems([]); 
+            setIsModalOpen(false); 
+            fetchPendingOrders();
+          } else {
+            const errorData = await res.json();
+            alert(`❌ เกิดข้อผิดพลาด: ${errorData.message || 'บันทึกไม่สำเร็จ'}`);
+          }
+        } catch (err) {
+          console.error(err);
+          alert('⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+        } finally {
+          setIsSubmitting(false);
         }
-      } catch (err) {
-        console.error(err);
-        alert('⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
-      } finally {
-        setIsSubmitting(false);
-      }
-  };
+    };
 
   const autoFillOrderQty = () => {
     const newItems = reviewItems.map(item => ({
@@ -592,95 +604,114 @@ const submitAddMore = async () => {
           </div>
         </div>
 
-        {/* --- รายการตรวจสอบสินค้าที่ไม่ครบ --- */}
-      {discrepancyItems.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3 px-2">
-            <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-              <span className="w-1.5 h-4 bg-red-500 rounded-full"></span>
-              ติดตามรายการที่มีปัญหา ({
-                discrepancyItems.filter((item, index, self) => 
-                  index === self.findIndex((t) => (t.id || t.productID) === (item.id || item.productID))
-                ).length
-              })
-            </h2>
-            <span className="text-[9px] font-bold text-slate-400 italic">เลื่อนดูรายการ ↔</span>
-          </div>
-          
-          <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar-h snap-x">
-            {discrepancyItems
-              .filter((item, index, self) => 
-                index === self.findIndex((t) => (t.id || t.productID) === (item.id || item.productID))
-              )
-              .map((item, idx) => {
-                // คู่ที่ 1: ลัง เทียบ ลัง
-                const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
-                // คู่ที่ 2: บรรจุ/ลัง เทียบ รับจริง(ชิ้น)
-                const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
-                
-                return (
-                  <div key={`issue-${item.id || item.productID || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-sm hover:border-red-200 transition-all">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex flex-wrap items-center gap-1 max-w-[60%]">
-                        <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                          {item.productID || item.productId}
+        {/* --- รายการตรวจสอบสินค้าที่ไม่ครบ (รูปแบบพรีเมียม) --- */}
+        {discrepancyItems.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4 px-2">
+              <h2 className="text-[12px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
+                <span className="w-2 h-5 bg-red-500 rounded-full"></span>
+                แจ้งเตือนรายการที่มีปัญหา ({
+                  Array.from(new Set(
+                    discrepancyItems
+                      .filter(item => 
+                        // ✅ แก้ไข: ไม่ต้องเช็ค ORDERED แล้ว เพื่อให้รายการยังอยู่แม้จะกดบันทึกไปแล้ว
+                        // จะหายไปก็ต่อเมื่อพิมพ์คำว่า "ตัดบิลจบ" ในโน้ตสต็อกเท่านั้น
+                        !item.Note_Stock?.includes('ตัดบิลจบ')
+                      )
+                      .map(item => item.productID || item.productId)
+                  )).length
+                })
+              </h2>
+              <span className="text-[9px] font-bold text-slate-400 italic px-2">เลื่อนดูรายการ ↔</span>
+            </div>
+            
+            <div className="flex gap-4 overflow-x-auto pb-6 custom-scrollbar-h snap-x">
+              {discrepancyItems
+                .filter(item => 
+                  // ✅ แก้ไขเงื่อนไขเดียวกัน: ให้รายการค้างไว้จนกว่าจะพิมพ์ "ตัดบิลจบ"
+                  !item.Note_Stock?.includes('ตัดบิลจบ')
+                )
+                // กรองรายการซ้ำตาม ID
+                .filter((item, index, self) => 
+                  index === self.findIndex((t) => (t.productID || t.productId) === (item.productID || item.productId))
+                )
+                .map((item, idx) => {
+                  const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
+                  const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
+
+                  return (
+                    <div 
+                      key={`issue-${item.productID || item.productId || idx}`} 
+                      className="shrink-0 w-80 snap-start bg-white p-6 rounded-[35px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all"
+                    >
+                      {/* ส่วนแสดงผลด้านในเหมือนเดิมของพี่ได้เลยครับ */}
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-3 py-1 rounded-lg uppercase italic">
+                          ID: {item.productID || item.productId}
                         </span>
-                        {item.supplier && (
-                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate">
-                            {item.supplier}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1">
-                        {/* 1. เช็คส่วนต่างลัง (แยกอิสระ) */}
-                        {diffCarton !== 0 && (
-                          <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
-                            {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
-                          </span>
-                        )}
-                        
-                        {/* 2. เช็คส่วนต่างเศษ (แยกอิสระ - จะโชว์พร้อมกันหรือโชว์เดี่ยวก็ได้) */}
-                        {diffInner !== 0 && (
-                          <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                            {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4">
-                      {item.name || item.Product_Name || item.productName}
-                    </h4>
-
-                    <div className="bg-slate-50 rounded-2xl p-4 mb-3 space-y-2">
-                      <div className="flex justify-between text-[11px] font-bold">
-                        <span className="text-slate-400 font-medium">ค่าอ้างอิง:</span>
-                        <div className="flex flex-col items-end">
-                          <span className="text-slate-900">{item.orderCarton} {item.cartonUnit}</span>
-                          <span className="text-slate-500 text-[10px]">บรรจุ {item.qtyPerCarton} {item.innerUnit}</span>
+                        <div className="flex flex-col items-end gap-1">
+                          {item.status === 'ORDERED' && (
+                            <span className="bg-blue-100 text-blue-600 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
+                              บันทึกแล้ว (รอเคลียร์)
+                            </span>
+                          )}
+                          {item.supplier && (
+                            <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-30">
+                              {item.supplier}
+                            </span>
+                          )}
+                          {diffCarton !== 0 && (
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
+                              {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
+                            </span>
+                          )}
+                          {diffInner !== 0 && (
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
+                              {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
-                        <span className="text-slate-400 font-medium">ตรวจรับจริง:</span>
-                        <div className="flex flex-col items-end text-red-600 italic">
-                           <span className="font-black">{item.recvCarton} {item.cartonUnit}</span>
-                           <span className="font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
+
+                      <h4 className="font-black text-slate-800 text-[14px] uppercase italic truncate mb-4">
+                        {item.productName || item.Product_Name || item.name}
+                      </h4>
+                      
+                      <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-2">
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span className="text-slate-400 font-medium">ค่าอ้างอิง (สั่ง/บรรจุ):</span>
+                          <div className="flex flex-col items-end">
+                            <span className="text-slate-900">{item.orderCarton} {item.cartonUnit}</span>
+                            <span className="text-slate-500 text-[10px]">บรรจุ {item.qtyPerCarton} {item.innerUnit}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
+                          <span className="text-slate-400 font-medium">ตรวจรับจริง:</span>
+                          <div className="flex flex-col items-end">
+                              <span className="text-red-600 italic font-black">{item.recvCarton} {item.cartonUnit}</span>
+                              <span className="text-red-600 italic font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {item.Recv_Date && (
-                      <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 font-black uppercase italic">
-                        อัปเดต: {item.Recv_Date}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {/* แสดง Note_Stock เพื่อดูความเคลื่อนไหว */}
+                      {item.Note_Stock && (
+                        <div className="mb-3 p-2 bg-amber-50 rounded-lg border border-amber-100 text-[10px] text-amber-700">
+                          <span className="font-black">หมายเหตุสต็อก:</span> {item.Note_Stock}
+                        </div>
+                      )}
+
+                      {item.Recv_Date && (
+                        <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 font-black uppercase italic">
+                          อัปเดต: {item.Recv_Date}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* --- แถบค้นหา --- */}
         <div className="mb-8 flex flex-col md:flex-row gap-4">

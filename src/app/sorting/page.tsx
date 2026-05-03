@@ -19,6 +19,7 @@ interface OrderItem {
   orderCarton?: string;
   cartonUnit?: string;
   innerUnit?: string;
+  Recv_Carton_Unit?: string;
   qtyPerCarton?: string;
   Note_Purchase?: string;
   Recv_Carton?: string | number;
@@ -187,6 +188,9 @@ export default function SortingPage() {
   const itemsPerPage = 6;
 
   const hasAutoScrolled = useRef<string | null>(null);
+
+  const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -538,48 +542,99 @@ const fetchStatus = async () => {
     setFormData({ id: '', name: '', supplier: formData.supplier, storeQty: '', warehouseQty: '', note: '' });
   };
 
-const submitBatch = async () => {
-    if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
-    
-    setIsSubmitting(true);
+  const submitBatch = async () => {
+      if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
+      
+      setIsSubmitting(true);
 
-    const now = new Date();
-    const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear() + 543}`;
-    
-    const finalBatchName = `${batchName.trim()} (${dateStr})`;
-    const customGroupId = finalBatchName; 
+      const now = new Date();
+      const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear() + 543}`;
+      
+      const finalBatchName = `${batchName.trim()} (${dateStr})`;
+      const customGroupId = finalBatchName; 
+
+      try {
+        const res = await fetch('/api/order', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            groupId: customGroupId,
+            groupName: finalBatchName,
+            items: items.map(it => ({
+              productId: it.id,
+              productName: it.name,
+              supplier: it.supplier,
+              shopQty: Number(it.storeQty),
+              stockQty: Number(it.warehouseQty),
+              note: it.note
+            }))
+          }),
+        });
+
+        if (res.ok) {
+          alert('🚀 ส่งบิลเรียบร้อยแล้วครับ!');
+          setItems([]);
+          setBatchName('');
+          setIsModalOpen(false);
+          if (typeof fetchStatus === 'function') fetchStatus();
+        } else {
+          alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+        }
+      } catch (error) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับ');
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    const handleDeleteItem = async (item: OrderItem) => {
+    if (!confirm(`ยืนยันการลบรายการ "${item.name}" ใช่หรือไม่?`)) return;
 
     try {
-      const res = await fetch('/api/order', { 
-        method: 'POST',
+      const res = await fetch(`/api/order?id=${item.id}&groupId=${item.batchId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        alert('ลบรายการเรียบร้อย');
+        fetchStatus(); // ฟังก์ชันโหลดข้อมูลใหม่ที่พี่มีอยู่แล้ว
+      } else {
+        alert('ลบไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    try {
+      const res = await fetch('/api/order', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          groupId: customGroupId,
-          groupName: finalBatchName,
-          items: items.map(it => ({
-            productId: it.id,
-            productName: it.name,
-            supplier: it.supplier,
-            shopQty: Number(it.storeQty),
-            stockQty: Number(it.warehouseQty),
-            note: it.note
-          }))
+        body: JSON.stringify({
+          id: editingItem.id,
+          groupId: editingItem.batchId,
+          productName: editingItem.name,
+          shopQty: Number(editingItem.storeQty),
+          stockQty: Number(editingItem.warehouseQty),
+          note: editingItem.note,
+          supplier: editingItem.supplier
         }),
       });
 
       if (res.ok) {
-        alert('🚀 ส่งบิลเรียบร้อยแล้วครับ!');
-        setItems([]);
-        setBatchName('');
-        setIsModalOpen(false);
-        if (typeof fetchStatus === 'function') fetchStatus();
+        alert('อัปเดตข้อมูลเรียบร้อย');
+        setIsEditModalOpen(false);
+        fetchStatus();
       } else {
-        alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+        alert('อัปเดตไม่สำเร็จ');
       }
-    } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับ');
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาด');
     }
   };
 
@@ -630,17 +685,20 @@ const submitBatch = async () => {
           </button>
         </div>
 
-        {/* Issue Tracking Section (Design like requested) */}
+{/* Issue Tracking Section (Fixed TypeScript Error) */}
         <section className="mb-12">
         {discrepancyItems.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3 px-2">
               <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-red-500 rounded-full"></span>
+                <span className="w-1.5 h-4 bg-red-500 rounded-full animate-pulse"></span>
                 ติดตามรายการที่มีปัญหา ({
-                  discrepancyItems.filter((item, index, self) => 
-                    index === self.findIndex((t) => t.id === item.id)
-                  ).length
+                  discrepancyItems
+                    .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
+                    .filter((item, index, self) => 
+                      // แก้ไขจาก productID เป็น id ตาม Interface OrderItem
+                      index === self.findIndex((t) => t.id === item.id)
+                    ).length
                 })
               </h2>
               <span className="text-[9px] font-bold text-slate-400 italic">เลื่อนดูรายการ ↔</span>
@@ -648,7 +706,9 @@ const submitBatch = async () => {
             
             <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar-h snap-x">
               {discrepancyItems
+                .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
                 .filter((item, index, self) => 
+                  // แก้ไขจาก productID เป็น id เพื่อความถูกต้องของ Type[cite: 3]
                   index === self.findIndex((t) => t.id === item.id)
                 )
                 .map((item, idx) => {
@@ -656,51 +716,66 @@ const submitBatch = async () => {
                   const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
                   
                   return (
-                    <div key={`issue-${item.id || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-sm hover:border-red-200 transition-all">
+                    <div key={`issue-${item.id || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all group">
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center gap-1">
                           <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                            {item.id}
+                            ID: {item.id}
                           </span>
                           {item.supplier && (
-                            <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                              - {item.supplier}
+                            <span className="bg-slate-50 text-slate-400 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-20">
+                              {item.supplier}
                             </span>
                           )}
                         </div>
 
                         <div className="flex flex-col items-end gap-1">
-                          {diffCarton !== 0 ? (
+                          {diffCarton !== 0 && (
                             <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
                               {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
                             </span>
-                          ) : diffInner !== 0 ? (
+                          )}
+                          {diffInner !== 0 && (
                             <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                              {diffInner < 0 ? `ขาดในกล่อง ${Math.abs(diffInner)}` : `เกินในกล่อง ${diffInner}`} {item.innerUnit}
+                              {diffInner < 0 ? `ขาดในกล่อง ${Math.abs(diffInner)}` : `เกินในกล่อง ${diffInner}`} {item.Recv_Qty_Unit}
                             </span>
-                          ) : null}
+                          )}
                         </div>
                       </div>
 
-                      <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4">
-                        {item.name || item.name}
+                      <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4 group-hover:text-red-500 transition-colors">
+                        {item.name}
                       </h4>
 
-                  <div className="bg-slate-50 rounded-2xl p-3 mb-4">
-                    <div className="flex justify-between text-[10px] mb-1">
-                      <span className="text-slate-400 uppercase font-black">สั่งซื้อ</span>
-                      <span className="text-slate-900 font-black">{item.orderCarton} {item.cartonUnit}(+ {item.qtyPerCarton || 0} {item.innerUnit})</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-slate-400 uppercase font-black">รับจริง</span>
-                      <span className="text-red-600 font-black">{item.Recv_Carton} {item.cartonUnit} (+ {item.Recv_Qty || 0} {item.innerUnit})</span>
-                    </div>
-                    {item.Recv_Date && (
-                      <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 font-black uppercase tracking-tighter">
-                        รับเมื่อ: {item.Recv_Date}
+                      <div className="bg-slate-50 rounded-2xl p-3 mb-3 border border-slate-100">
+                        <div className="flex justify-between text-[10px] mb-1">
+                          <span className="text-slate-400 uppercase font-black">สั่งซื้อ</span>
+                          <span className="text-slate-900 font-black">{item.orderCarton} {item.cartonUnit} <span className="text-slate-400">(+{item.qtyPerCarton || 0})</span></span>
+                        </div>
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-red-500 uppercase font-black underline decoration-red-200 underline-offset-2">รับจริง</span>
+                          <span className="text-red-600 font-black">{item.Recv_Carton} {item.Recv_Carton_Unit} <span className="text-red-400">(+{item.Recv_Qty || 0})</span></span>
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {item.Note_Stock && (
+                        <div className="mb-3 px-3 py-2 bg-red-50 rounded-xl border border-red-100">
+                          <p className="text-[9px] text-red-700 font-bold leading-tight">
+                            📝 {item.Note_Stock}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-50">
+                        <span className="text-[8px] text-slate-300 font-black uppercase italic">
+                          {item.batchName?.split('(')[0] || 'ไม่ระบุรอบ'}
+                        </span>
+                        {item.Recv_Date && (
+                          <span className="text-[9px] text-slate-400 font-black">
+                            {item.Recv_Date.split(' ')[0]}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
               })}
@@ -964,16 +1039,37 @@ const submitBatch = async () => {
                                           </div>
                                         </div>
 
-                                        <div className={`w-full md:w-32 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
-                                            order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
-                                            order.status === 'COMPLETED' ? 'bg-slate-900 text-white border-slate-900' : 
-                                            (order.status === 'ORDERED' || order.status === 'RECEIVED') ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' : 
-                                            'bg-blue-50 text-blue-600 border-blue-100'
-                                          }`}>
-                                          {order.status === 'REJECTED' ? '✖ ปฏิเสธ' : 
-                                          order.status === 'COMPLETED' ? '🏁 เรียบร้อย' : 
-                                          order.status === 'RECEIVED' ? '🚚 กำลังนำส่ง (บางส่วน)' :
-                                          order.status === 'ORDERED' ? '🚚 กำลังนำส่ง' : '⏳ รอจัดซื้อ'}
+                                        {/* แก้ไขส่วน Status และเพิ่มปุ่มจัดการ */}
+                                        <div className="flex flex-col gap-2 w-full md:w-32">
+                                          <div className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
+                                              order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
+                                              order.status === 'COMPLETED' ? 'bg-slate-900 text-white border-slate-900' : 
+                                              (order.status === 'ORDERED' || order.status === 'RECEIVED') ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' : 
+                                              'bg-blue-50 text-blue-600 border-blue-100'
+                                            }`}>
+                                            {order.status === 'REJECTED' ? '✖ ปฏิเสธ' : 
+                                            order.status === 'COMPLETED' ? '🏁 เรียบร้อย' : 
+                                            order.status === 'RECEIVED' ? '🚚 ส่งบางส่วน' :
+                                            order.status === 'ORDERED' ? '🚚 กำลังส่ง' : '⏳ รอจัดซื้อ'}
+                                          </div>
+                                          
+                                          {/* ปุ่มจัดการรายการ (แสดงเฉพาะเมื่อยังไม่ COMPLETED) */}
+                                          {order.status !== 'COMPLETED' && (
+                                            <div className="flex gap-1">
+                                              <button 
+                                                onClick={() => { setEditingItem(order); setIsEditModalOpen(true); }}
+                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl text-[9px] font-black transition-all bg-white"
+                                              >
+                                                แก้ไข
+                                              </button>
+                                              <button 
+                                                onClick={() => handleDeleteItem(order)}
+                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 rounded-xl text-[9px] font-black transition-all bg-white"
+                                              >
+                                                ลบ
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -991,6 +1087,84 @@ const submitBatch = async () => {
             </div>
           )}
         </section>
+
+ {isEditModalOpen && editingItem && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-4">
+            <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border-t-8 border-blue-600">
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
+                <h2 className="text-xl font-black uppercase italic">แก้ไขข้อมูลสินค้า</h2>
+                <button onClick={() => setIsEditModalOpen(false)} className="text-xl hover:rotate-90 transition-transform">✕</button>
+              </div>
+
+              <form onSubmit={handleUpdateItem} className="p-8 space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  {/* เพิ่มช่องแก้รหัสสินค้า */}
+                  <div className="col-span-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">รหัสสินค้า (ID)</label>
+                    <input 
+                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editingItem.id} 
+                      onChange={(e) => setEditingItem({...editingItem, id: e.target.value})} 
+                    />
+                  </div>
+                  {/* เพิ่มช่องแก้ซัพพลายเออร์ */}
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ซัพพลายเออร์ (Supplier)</label>
+                    <input 
+                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none uppercase" 
+                      value={editingItem.supplier || ''} 
+                      onChange={(e) => setEditingItem({...editingItem, supplier: e.target.value})} 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ชื่อสินค้า</label>
+                  <input 
+                    className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={editingItem.name} 
+                    onChange={(e) => setEditingItem({...editingItem, name: e.target.value})} 
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>
+                    <input 
+                      type="number" 
+                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editingItem.storeQty} 
+                      onChange={(e) => setEditingItem({...editingItem, storeQty: e.target.value})} 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ในคลัง</label>
+                    <input 
+                      type="number" 
+                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editingItem.warehouseQty} 
+                      onChange={(e) => setEditingItem({...editingItem, warehouseQty: e.target.value})} 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หมายเหตุ</label>
+                  <textarea 
+                    className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                    rows={2} 
+                    value={editingItem.note} 
+                    onChange={(e) => setEditingItem({...editingItem, note: e.target.value})} 
+                  />
+                </div>
+
+                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl uppercase text-[11px] tracking-widest hover:bg-slate-900 shadow-lg transition-all active:scale-[0.98]">
+                  บันทึกการแก้ไขข้อมูล
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
