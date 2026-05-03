@@ -74,6 +74,7 @@ const exportToExcel = async (batchId: string, activeBatches: Record<string, Orde
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
+  const [originalId, setOriginalId] = useState('');
 
   worksheet.mergeCells('A1:L1');
   const titleCell = worksheet.getCell('A1');
@@ -191,6 +192,7 @@ export default function SortingPage() {
 
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [originalId, setOriginalId] = useState(''); // ✅ 1. เพิ่มบรรทัดนี้เพื่อล็อก ID เดิม
 
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -607,36 +609,38 @@ const fetchStatus = async () => {
   };
 
   const handleUpdateItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingItem) return;
+      e.preventDefault();
+      if (!editingItem) return;
 
-    try {
-      const res = await fetch('/api/order', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingItem.id,
-          groupId: editingItem.batchId,
-          productName: editingItem.name,
-          shopQty: Number(editingItem.storeQty),
-          stockQty: Number(editingItem.warehouseQty),
-          note: editingItem.note,
-          supplier: editingItem.supplier
-        }),
-      });
+      try {
+        const res = await fetch('/api/order', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            oldId: originalId,           // ✅ ใช้ ID ดั้งเดิมที่เราล็อกไว้
+            id: editingItem.id,          // ค่า ID ใหม่จากช่อง Input
+            groupId: editingItem.batchId,
+            productName: editingItem.name,
+            shopQty: Number(editingItem.storeQty),
+            stockQty: Number(editingItem.warehouseQty),
+            note: editingItem.note,
+            supplier: editingItem.supplier
+          }),
+        });
 
-      if (res.ok) {
-        alert('อัปเดตข้อมูลเรียบร้อย');
-        setIsEditModalOpen(false);
-        fetchStatus();
-      } else {
-        alert('อัปเดตไม่สำเร็จ');
+        if (res.ok) {
+          alert('🚀 อัปเดตข้อมูลเรียบร้อย');
+          setIsEditModalOpen(false);
+          fetchStatus();
+        } else {
+          const errorData = await res.json();
+          alert(`❌ อัปเดตไม่สำเร็จ: ${errorData.error || 'ไม่พบรายการ'}`);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
       }
-    } catch (err) {
-      console.error(err);
-      alert('เกิดข้อผิดพลาด');
-    }
-  };
+    };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
@@ -1057,7 +1061,7 @@ const fetchStatus = async () => {
                                           {order.status !== 'COMPLETED' && (
                                             <div className="flex gap-1">
                                               <button 
-                                                onClick={() => { setEditingItem(order); setIsEditModalOpen(true); }}
+                                                onClick={() => { setEditingItem(order); setOriginalId(order.id); setIsEditModalOpen(true); }}
                                                 className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl text-[9px] font-black transition-all bg-white"
                                               >
                                                 แก้ไข
