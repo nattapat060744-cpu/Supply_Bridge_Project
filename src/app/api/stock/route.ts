@@ -40,6 +40,7 @@ export async function GET() {
         Recv_Date: r.get('Recv_Date') || '', 
         status: r.get('Status')?.toString().trim().toUpperCase(),
         Created_At: r.get('Created_At') || r.get('Date') || '',
+        Created_At_P: r.get('Created_At_P') || r.get('Date_P') || '',
         invoiceNo: r.get('Invoice_No') || r.get('เลขที่บิล') || '' 
       }));
     return NextResponse.json(allItems);

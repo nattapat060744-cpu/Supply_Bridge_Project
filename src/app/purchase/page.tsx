@@ -216,12 +216,32 @@ useEffect(() => {
     setReviewBatch(batchId);
   };
 
-  const handleFinalConfirm = async () => {
+    const getThaiTimestamp = () => {
+    const now = new Date();
+    return now.toLocaleString('th-TH', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false,
+    });
+  };
+
+const handleFinalConfirm = async () => {
     if (isSubmitting) return;
     if (!confirm(`ยืนยันการบันทึกรายการชุดนี้ใช่ไหมครับ?`)) return;
 
     setIsSubmitting(true);
     try {
+      // ✅ สร้างเวลาปัจจุบันตอน "กดยืนยันสั่งของ"
+      const confirmedAt = new Date().toLocaleString('th-TH', {
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', second: 'numeric',
+        hour12: false
+      });
+
       const itemsToSubmit = reviewItems.map(item => ({
         id: item.id || (item as any).ID || (item as any).rowNumber, 
         status: item.isRejected ? 'REJECTED' : 'ORDERED',
@@ -230,13 +250,18 @@ useEffect(() => {
         qtyPerCarton: item.qtyPerCarton,
         innerUnit: item.innerUnit,
         purchaseNote: item.notePurchase,
-        purchaseQty: Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0)
+        purchaseQty: Number(item.orderCarton || 0) * Number(item.qtyPerCarton || 0),
+        // ✅ ลงเวลาที่ช่อง Created_At_P สำหรับการสั่งซื้อจริง
+        Created_At_P: confirmedAt 
       }));
 
       const res = await fetch('/api/purchase', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToSubmit }),
+        body: JSON.stringify({ 
+          items: itemsToSubmit,
+          updatedAt: confirmedAt 
+        }),
       });
 
       if (res.ok) {
@@ -253,7 +278,7 @@ useEffect(() => {
     } finally {
       setIsSubmitting(false);
     }
-  };
+};
 
   const parseThaiDate = (dateStr: string) => {
     if (!dateStr) return 0;
@@ -317,53 +342,59 @@ useEffect(() => {
   };
 
   const submitBatch = async () => {
-    if (isSubmitting) return;
-    if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+      if (isSubmitting) return;
+      if (!batchName) return alert('กรุณาระบุชื่อรอบการสั่งซื้อด้วยครับ');
+      if (items.length === 0) return alert('ไม่มีรายการสินค้าในบิลครับ');
 
-    setIsSubmitting(true);
-    try {
-      // 1. สร้างวันที่มาตรฐาน (ISO format) เพื่อใช้เก็บลง DB ให้เรียงลำดับง่าย
-      const now = new Date();
-      
-      // สร้างวันที่แบบไทยสำหรับแสดงผลในชื่อบิล (ว/ด/ป น:น)
-      const displayDate = now.toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-      const displayTime = now.toLocaleTimeString('th-TH', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
+      setIsSubmitting(true);
+      try {
+        const now = new Date();
+        
+        // ✅ 1. วันที่สำหรับใส่ในชื่อบิล (เช่น 02/05/2569)
+        const displayDate = now.toLocaleDateString('th-TH', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
 
-      // 2. ชื่อบิลที่จะบันทึก (ชื่อที่พี่ชายพิมพ์ + วันที่เวลาปัจจุบัน)
-      const finalBatchName = `${batchName} (${displayDate})`;
-      
-      // 3. วันที่แบบ Full ISO สำหรับฟิลด์ Created_At (เพื่อให้ระบบหลังบ้านเรียงข้อมูลแม่นยำ)
-      const isoString = now.toISOString(); 
+        // ✅ 2. เวลาสำหรับลงช่อง Created_At
+        const thaiTimestamp = now.toLocaleString('th-TH', {
+          year: 'numeric', month: 'numeric', day: 'numeric',
+          hour: 'numeric', minute: 'numeric', second: 'numeric',
+          hour12: false
+        });
 
-      const res = await fetch('/api/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          groupName: finalBatchName,
-          items: items,
-          // ใช้ ISO String ไปเลย จะได้ไม่แปลกเวลาดึงข้อมูลไปวิเคราะห์ต่อ
-          createdAt: isoString, 
-          groupId: finalBatchName.trim() 
-        }),
-      });
+        // ✅ 3. ชื่อบิล: เอาแค่ชื่อ + วันที่พอ (ไม่มีเลขแปลกๆ ต่อท้ายแล้ว)
+        const finalBatchName = `${batchName.trim()} (${displayDate})`;
 
-      if (res.ok) {
-        alert(`🚀 สร้างบิล "${finalBatchName}" เรียบร้อย!`);
-        // ... ล้างค่า State ต่างๆ
+        const res = await fetch('/api/purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            groupName: finalBatchName,
+            items: items,
+            Created_At: thaiTimestamp, // ลงเวลาสร้างบิล
+            // groupId ใช้ข้างหลังระบบเฉยๆ ไม่เกี่ยวกับชื่อที่พี่เห็น
+            groupId: `${finalBatchName.replace(/\s+/g, '_')}_${Date.now()}` 
+          }),
+        });
+
+        if (res.ok) {
+          alert(`🚀 สร้างบิล "${finalBatchName}" เรียบร้อย!`);
+          setBatchName(''); 
+          setItems([]); 
+          setIsModalOpen(false); 
+          fetchPendingOrders();
+        } else {
+          const errorData = await res.json();
+          alert(`❌ เกิดข้อผิดพลาด: ${errorData.message || 'บันทึกไม่สำเร็จ'}`);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const autoFillOrderQty = () => {
@@ -441,19 +472,19 @@ useEffect(() => {
       return groups;
     }, [filteredBatchKeys, batches, currentPage, itemsPerPage]);
 
-  const submitAddMore = async () => {
+const submitAddMore = async () => {
     if (items.length === 0 || !targetGroupId || isSubmitting) return;
     setIsSubmitting(true);
 
     try {
+      // ✅ กลับไปใช้รูปแบบเวลาเดิม (ISO) เพื่อไม่ให้กระทบความเป็นจริงของข้อมูลตามที่พี่สั่ง
       const now = new Date().toISOString();
       
-      // เตรียมข้อมูลทั้งหมด (ทั้งเก่าและใหม่) ส่งไปใน groupId เดิม
       const finalItems = items.map(item => ({
         ...item,
         groupId: targetGroupId,
         status: 'ORDERED',
-        createdAt: now,
+        createdAt: now, 
       }));
 
       const res = await fetch('/api/purchase', {
@@ -464,18 +495,28 @@ useEffect(() => {
           items: finalItems,
           createdAt: now,
           groupId: targetGroupId,
-          isUpdate: true // ส่ง Flag ไปบอก API ว่านี่คือการอัปเดตบิลเดิมนะ
+          isUpdate: true 
         }),
       });
 
       if (res.ok) {
-        alert(`🚀 อัปเดตบิล "${targetGroupId}" เรียบร้อย! (รวมเป็น ${items.length} รายการ)`);
-        setIsAddingMore(false);
-        setIsModalOpen(false);
-        setItems([]);
+        alert(`🚀 อัปเดตบิล "${targetGroupId}" เรียบร้อย!`);
+        
+        // ✅ ปิดหน้าจอและล้างค่า State ทั้งหมดให้ทันที
+        setIsModalOpen(false);      
+        setIsAddingMore(false);    
+        setItems([]);              
+        setExistingItems([]);      
+        setTargetGroupId('');      
+        setBatchName('');          
+
         fetchPendingOrders();
+      } else {
+        const errorData = await res.json();
+        alert(`❌ เกิดข้อผิดพลาด: ${errorData.message || 'บันทึกไม่สำเร็จ'}`);
       }
     } catch (err) {
+      console.error(err);
       alert('เกิดข้อผิดพลาดในการบันทึกครับ');
     } finally {
       setIsSubmitting(false);

@@ -21,6 +21,7 @@ interface StockItem {
   status?: string; 
   Recv_Date?: string;
   Created_At?: string;
+  Created_At_P?: string;
   invoiceNo?: string;
 }
 
@@ -293,13 +294,14 @@ const exportToExcel = () => {
 
     // 3. หัวตาราง (แบ่งกลุ่มชัดเจน)
     const tableHeader = [
-      "ID อ้างอิง", "รหัสสินค้า", "รายการสินค้า", "หน่วยหลัก", "ยอดสั่ง (กล่อง)", "บรรจุ/กล่อง", "หน่วยย่อย", "|", 
+      "ID อ้างอิง", "วันที่สั่งซื้อ", "รหัสสินค้า", "รายการสินค้า", "หน่วยหลัก", "ยอดสั่ง (กล่อง)", "บรรจุ/กล่อง", "หน่วยย่อย", "|", 
       "รับจริง (กล่อง)", "รับจริง (ชิ้น)", "เลขที่บิล (Invoice)", "หมายเหตุ"
     ];
 
     // 4. เตรียมข้อมูล Data Rows
     const rows = filteredForExport.map((item) => [
       item.rowId,
+      item.Created_At_P || '-', // <--- ดึงวันที่สั่งซื้อมาใส่
       item.productID,
       item.productName,
       item.cartonUnit,
@@ -319,7 +321,7 @@ const exportToExcel = () => {
 
     // 6. ตั้งค่าความกว้างคอลัมน์ (Column Widths)
     worksheet['!cols'] = [
-      { wch: 12 }, { wch: 15 }, { wch: 50 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 3 },
+      { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 50 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 3 },
       { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 25 }
     ];
 
@@ -602,7 +604,7 @@ const exportToExcel = () => {
     </div>
   );
 
-  const handleFinalExport = () => {
+ const handleFinalExport = () => {
     // 1. กรองข้อมูลตามรายชื่อบริษัทที่ติ๊กเลือกไว้
     const dataToExport = items.filter(item => {
       const matchStatus = item.status === 'ORDERED';
@@ -615,10 +617,10 @@ const exportToExcel = () => {
       return;
     }
 
-    // 2. จัดเรียงข้อมูลตามชื่อซัพพลายเออร์ (เพื่อให้ใน Excel เรียงเป็นกลุ่มดูง่าย)
+    // 2. จัดเรียงข้อมูลตามชื่อซัพพลายเออร์
     dataToExport.sort((a, b) => a.supplier.localeCompare(b.supplier));
 
-    // 3. ส่วนหัวและโครงสร้าง Excel (เหมือนเดิมแต่ปรับชื่อซัพพลายเออร์)
+    // 3. ส่วนหัวและโครงสร้าง Excel
     const header = [
       ["ศูนย์ค้าส่งสำเพ็งบุรีรัมย์ - ใบแจ้งตรวจรับสินค้า (STOCK INBOUND)"],
       [`ซัพพลายเออร์ที่เลือก: ${exportSuppliers.join(', ')}`],
@@ -626,15 +628,58 @@ const exportToExcel = () => {
       [""],
     ];
 
-    const tableHeader = ["ID อ้างอิง", "รหัสสินค้า", "รายการสินค้า", "ซัพพลายเออร์", "หน่วยหลัก", "ยอดสั่ง (กล่อง)", "บรรจุ/กล่อง", "หน่วยย่อย", "|", "รับจริง (กล่อง)", "รับจริง (ชิ้น)", "เลขที่บิล", "หมายเหตุ"];
+    // ✅ เพิ่ม "วันที่สั่งซื้อ" ในหัวตาราง
+    const tableHeader = [
+      "ID อ้างอิง", 
+      "วันที่สั่งซื้อ", // <--- เพิ่มตรงนี้
+      "รหัสสินค้า", 
+      "รายการสินค้า", 
+      "ซัพพลายเออร์", 
+      "หน่วยหลัก", 
+      "ยอดสั่ง (กล่อง)", 
+      "บรรจุ/กล่อง", 
+      "หน่วยย่อย", 
+      "|", 
+      "รับจริง (กล่อง)", 
+      "รับจริง (ชิ้น)", 
+      "เลขที่บิล", 
+      "หมายเหตุ"
+    ];
     
+    // ✅ เพิ่ม item.Created_At เข้าไปใน Rows
     const rows = dataToExport.map(item => [
-      item.rowId, item.productID, item.productName, item.supplier, item.cartonUnit, 
-      Number(item.orderCarton), Number(item.qtyPerCarton || 0), item.innerUnit || '-', "|", "", "", "", ""
+      item.rowId, 
+      item.Created_At_P || '-', // <--- ดึงวันที่สั่งซื้อมาใส่
+      item.productID, 
+      item.productName, 
+      item.supplier, 
+      item.cartonUnit, 
+      Number(item.orderCarton), 
+      Number(item.qtyPerCarton || 0), 
+      item.innerUnit || '-', 
+      "|", 
+      "", "", "", ""
     ]);
 
     const worksheet = XLSX.utils.aoa_to_sheet([...header, tableHeader, ...rows]);
-    worksheet['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 45 }, { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 3 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 25 }];
+    
+    // ✅ ปรับความกว้างคอลัมน์ (เพิ่มช่องวันที่เข้ามา 1 ช่อง)
+    worksheet['!cols'] = [
+      { wch: 12 }, // ID
+      { wch: 15 }, // วันที่สั่งซื้อ (ใหม่)
+      { wch: 15 }, // รหัสสินค้า
+      { wch: 45 }, // รายการ
+      { wch: 20 }, // ซัพพลายเออร์
+      { wch: 10 }, // หน่วยหลัก
+      { wch: 12 }, // ยอดสั่ง
+      { wch: 12 }, // บรรจุ
+      { wch: 10 }, // หน่วยย่อย
+      { wch: 3 },  // |
+      { wch: 18 }, // รับกล่อง
+      { wch: 18 }, // รับชิ้น
+      { wch: 20 }, // เลขบิล
+      { wch: 25 }  // หมายเหตุ
+    ];
     
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
