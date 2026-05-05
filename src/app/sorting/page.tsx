@@ -722,11 +722,11 @@ const fetchStatus = async () => {
                     <div key={`issue-${item.id || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all group">
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center gap-1">
-                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
+                          <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-1 rounded-lg uppercase">
                             ID: {item.id}
                           </span>
                           {item.supplier && (
-                            <span className="bg-slate-50 text-slate-400 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-20">
+                            <span className="bg-slate-50 text-slate-400 text-[10px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-20">
                               {item.supplier}
                             </span>
                           )}
@@ -984,7 +984,7 @@ const fetchStatus = async () => {
                                     <div key={idx} className={`p-6 md:px-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-700 ${isItemUpdated ? 'bg-blue-50 border-l-8 border-blue-500' : 'hover:bg-slate-50/50 border-l-8 border-transparent'}`}>
                                       <div className="flex-1 w-full md:w-auto">
                                         <div className="flex items-center gap-2 mb-1">
-                                          <span className="text-[9px] bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500 uppercase tracking-tighter">ID: {order.id}</span>
+                                          <span className="text-[12px] bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500 uppercase tracking-tighter">ID: {order.id}</span>
                                           {isItemUpdated && (
                                             <span className="flex h-2 w-2 relative">
                                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
