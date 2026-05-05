@@ -68,48 +68,47 @@ const parseThaiDate = (rawDate: string | number | Date) => {
   return date;
 };
 
-const exportToExcel = async (batchId: string, activeBatches: Record<string, OrderItem[]>) => {
-  const batchItems = activeBatches[batchId];
-  if (!batchItems || batchItems.length === 0) return;
+  const exportToExcel = async (batchId: string, activeBatches: Record<string, OrderItem[]>) => {
+    const batchItems = activeBatches[batchId];
+    if (!batchItems || batchItems.length === 0) return;
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
-  const [originalId, setOriginalId] = useState('');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
 
-  worksheet.mergeCells('A1:L1');
-  const titleCell = worksheet.getCell('A1');
-  titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
-  titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } };
-  titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
-  worksheet.getRow(1).height = 35;
+    worksheet.mergeCells('A1:L1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
+    titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } };
+    titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.getRow(1).height = 35;
 
-  const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L'];
-  mergedCols.forEach(col => worksheet.mergeCells(`${col}2:${col}3`));
-  worksheet.mergeCells('G2:J2');
+    const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L'];
+    mergedCols.forEach(col => worksheet.mergeCells(`${col}2:${col}3`));
+    worksheet.mergeCells('G2:J2');
 
-  const h = {
-    A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
-    D2: 'สินค้าในล็อก', E2: 'สต็อก', F2: 'ว/ดป สั่งซื้อ',
-    G2: 'จำนวนที่สั่งซื้อ', G3: 'จำนวน', H3: 'ลัง/มัด',
-    I3: 'จำนวน', J3: 'ชิ้น/โหล', K2: 'หมายเหตุ จัดซื้อ', L2: 'หมายเหตุ จัดเรียง'
-  };
-  Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
+    const h = {
+      A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
+      D2: 'สินค้าในล็อก', E2: 'สต็อก', F2: 'ว/ดป สั่งซื้อ',
+      G2: 'จำนวนที่สั่งซื้อ', G3: 'จำนวน', H3: 'ลัง/มัด',
+      I3: 'จำนวน', J3: 'ชิ้น/โหล', K2: 'หมายเหตุ จัดซื้อ', L2: 'หมายเหตุ จัดเรียง'
+    };
+    Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
 
-  [2, 3].forEach(rowNum => {
-    const row = worksheet.getRow(rowNum);
-    row.height = 25;
-    row.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อน
-      cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-      };
+    [2, 3].forEach(rowNum => {
+      const row = worksheet.getRow(rowNum);
+      row.height = 25;
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อน
+        cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+        };
+      });
     });
-  });
 
   batchItems.forEach((item, index) => {
     const row = worksheet.addRow([
