@@ -16,6 +16,7 @@ interface OrderItem {
   batchId?: string;
   batchName?: string;
   createdAt?: string;
+  Created_At_P?: string;
   orderCarton?: string;
   cartonUnit?: string;
   innerUnit?: string;
@@ -117,7 +118,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
       item.supplier,
       item.storeQty || '0',
       item.warehouseQty || '0',
-      item.createdAt ? parseThaiDate(item.createdAt).toLocaleDateString('th-TH') : '-',
+      item.Created_At_P ? parseThaiDate(item.Created_At_P).toLocaleDateString('th-TH') : '-',
       item.orderCarton || '0',
       item.cartonUnit || 'ลัง',
       item.qtyPerCarton || '0',

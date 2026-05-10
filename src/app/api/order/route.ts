@@ -29,6 +29,7 @@ export async function POST(req: Request) {
       'Stock_Qty': item.stockQty,
       'Note_Request': item.note,
       'Created_At': new Date().toLocaleString('th-TH'),
+      'Created_At_P': item.Created_At_P || '',
       'Order_Carton': '', 'Carton_Unit': '', 'Order_Qty': '', 'Inner_Unit': '', 'Qty_Per_Carton': '', 'Note_Purchase': '',
       'Recv_Carton': '', 'Recv_Carton_Unit': '', 'Recv_Unit': '', 'Recv_Qty': '', 'Recv_Qty_Unit': '', 'Recv_Date': '', 'Note_Stock': '',
     }));
@@ -58,6 +59,7 @@ export async function GET() {
       Stock_Qty: row.get('Stock_Qty'),
       Note_Request: row.get('Note_Request'),
       Created_At: row.get('Created_At'),
+      Created_At_P: row.get('Created_At_P'),
       Order_Carton: row.get('Order_Carton'),
       Carton_Unit: row.get('Carton_Unit'),
       Inner_Unit: row.get('Inner_Unit'),
