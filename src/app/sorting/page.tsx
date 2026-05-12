@@ -9,6 +9,7 @@ interface OrderItem {
   id: string;
   name: string;
   supplier: string;
+  Status?: string;
   storeQty: string;
   warehouseQty: string;
   note: string;
@@ -76,22 +77,22 @@ const parseThaiDate = (rawDate: string | number | Date) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
 
-    worksheet.mergeCells('A1:L1');
+    worksheet.mergeCells('A1:M1');
     const titleCell = worksheet.getCell('A1');
     titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
     titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } };
     titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(1).height = 35;
 
-    const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L'];
+    const mergedCols = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L', 'M'];
     mergedCols.forEach(col => worksheet.mergeCells(`${col}2:${col}3`));
     worksheet.mergeCells('G2:J2');
 
     const h = {
       A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
-      D2: 'สินค้าในล็อก', E2: 'สต็อก', F2: 'ว/ดป สั่งซื้อ',
-      G2: 'จำนวนที่สั่งซื้อ', G3: 'จำนวน', H3: 'ลัง/มัด',
-      I3: 'จำนวน', J3: 'ชิ้น/โหล', K2: 'หมายเหตุ จัดซื้อ', L2: 'หมายเหตุ จัดเรียง'
+      D2: 'สถานะ', E2: 'สินค้าในล็อก', F2: 'สต็อก',
+      G2: 'จำนวนที่สั่งซื้อ', G3: 'ว/ดป สั่งซื้อ', H3: 'จำนวน', I3: 'ลัง/มัด',
+      J3: 'จำนวน', K3: 'ชิ้น/โหล', L2: 'หมายเหตุ จัดซื้อ', M2: 'หมายเหตุ จัดเรียง'
     };
     Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
 
@@ -116,6 +117,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
       item.id,
       item.name,
       item.supplier,
+      item.Status || 'PENDING',
       item.storeQty || '0',
       item.warehouseQty || '0',
       item.Created_At_P ? parseThaiDate(item.Created_At_P).toLocaleDateString('th-TH') : '-',
@@ -153,6 +155,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
     { width: 18 }, // รหัส
     { width: 45 }, // ชื่อสินค้า (กว้างพิเศษ)
     { width: 25 }, // ซัพพลายเออร์
+    { width: 15 }, // สถานะ
     { width: 12 }, // ล็อก
     { width: 10 }, // สต็อก
     { width: 15 }, // วันที่
@@ -197,7 +200,7 @@ export default function SortingPage() {
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
   const [formData, setFormData] = useState({
-    id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: ''
+    id: '', name: '', supplier: '', Status: 'PENDING', storeQty: '', warehouseQty: '', note: ''
   });
 
   const [expandedNotes, setExpandedNotes] = useState<{ [key: string]: boolean }>({});
@@ -541,7 +544,7 @@ const fetchStatus = async () => {
     }
     const newItem: OrderItem = { ...formData, tempId: Date.now() };
     setItems([...items, newItem]);
-    setFormData({ id: '', name: '', supplier: formData.supplier, storeQty: '', warehouseQty: '', note: '' });
+    setFormData({ id: '', name: '', Status: 'PENDING', supplier: formData.supplier, storeQty: '', warehouseQty: '', note: '' });
   };
 
   const submitBatch = async () => {
