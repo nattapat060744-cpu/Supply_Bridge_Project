@@ -99,3 +99,50 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const sheet = await getSheet();
+    const rows = await sheet.getRows();
+    
+    // ค้นหาแถวด้วย rowId
+    const row: any = rows.find(r => r.rowNumber === body.rowId);
+
+    if (row) {
+      const currentStatus = row.get('Status')?.toString().trim().toUpperCase();
+      if (currentStatus === 'COMPLETED') {
+        return NextResponse.json({ 
+          success: false, 
+          message: `รายการแถวที่ ${body.rowId} นี้ถูกบันทึกไปแล้วครับพี่ชาย` 
+        }, { status: 400 });
+      }
+
+      // ✅ แก้ไขจุดนี้: รองรับทั้งคีย์ receiver (แบบใหม่) และ receiverName (แบบเดิม)
+      const finalReceiver = body.receiver !== undefined ? body.receiver : body.receiverName;
+      if (finalReceiver !== undefined) row.set('Receiver_Name', finalReceiver);
+      
+      if (body.recvCarton !== undefined) row.set('Recv_Carton', body.recvCarton);
+      if (body.Recv_Qty !== undefined) row.set('Recv_Qty', body.Recv_Qty);
+      if (body.Note_Stock !== undefined) row.set('Note_Stock', body.Note_Stock);
+      
+      // เปลี่ยนสถานะและบันทึกหน่วยตามเงื่อนไขของสต็อก
+      row.set('Status', 'COMPLETED');
+      row.set('Recv_Unit', row.get('Carton_Unit') || '');
+      row.set('Recv_Qty_Unit', row.get('Inner_Unit') || '');
+      row.set('Recv_Date', body.Recv_Date || new Date().toLocaleString('th-TH')); 
+
+      if (body.invoiceNo !== undefined) {
+        row.set('Invoice_No', String(body.invoiceNo).trim());
+      }
+
+      await row.save();
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ success: false, message: 'ไม่พบรายการที่ต้องการอัปเดต' }, { status: 404 });
+  } catch (error: any) {
+    console.error('POST Error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
