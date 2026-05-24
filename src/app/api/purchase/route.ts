@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 export const revalidate = 0;
 
-// --- ส่วน GET: เพิ่ม Note_Stock ในการดึงข้อมูล ---
+// --- ส่วน GET: เพิ่ม Note_Stock และแก้ไขให้ยอมปล่อย ORDERED ออกไปเช็คเวลาที่หน้าบ้าน ---
 export async function GET() {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) {
@@ -25,8 +25,15 @@ export async function GET() {
     const allItems = rows
       .filter(r => {
         const s = (r.get('Status') || '').toString().trim().toUpperCase();
+        
+        // 1. ถ้าเป็น PENDING ให้ผ่านไปโชว์ตามปกติเสมอ
         if (s === 'PENDING') return true;
-        if (s === 'ORDERED' || s === 'COMPLETED' || s === 'RECEIVED') {
+        
+        // 2. ✅ แก้ไขจุดนี้: ถ้าเป็น ORDERED ให้ปล่อยผ่านเพื่อให้หน้าบ้านไปจัดการเช็คเงื่อนไขเวลา 1 วันเองได้เลย
+        if (s === 'ORDERED') return true;
+
+        // 3. ถ้าเป็น COMPLETED หรือ RECEIVED ให้ใช้ลอจิกเช็คของดิฟตามเดิม ไม่ไปแตะต้องครับ
+        if (s === 'COMPLETED' || s === 'RECEIVED') {
           const orderCarton = Number(r.get('Order_Carton') || 0);
           const recvCartonRaw = r.get('Recv_Carton');
           const recvCarton = Number(recvCartonRaw || 0);
@@ -72,7 +79,7 @@ export async function GET() {
   }
 }
 
-// --- ส่วน POST: เพิ่ม Note_Stock ตอนบันทึกแถวใหม่ ---
+// --- ส่วน POST: เพิ่ม Note_Stock ตอนบันทึกแถวใหม่ (คงเดิม ไม่แก้ไข) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -120,7 +127,7 @@ export async function POST(req: Request) {
   }
 }
 
-// --- ส่วน PATCH: เพิ่มการอัปเดต Note_Stock ---
+// --- ส่วน PATCH: เพิ่มการอัปเดต Note_Stock (คงเดิม ไม่แก้ไข) ---
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();

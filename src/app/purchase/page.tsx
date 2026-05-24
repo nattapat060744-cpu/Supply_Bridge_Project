@@ -37,6 +37,7 @@ interface OrderItem {
   Recv_Date?: string;
   notePur ?: string;
   Created_At?: string;
+  Created_At_P?: string;
 }
 
 interface Notification {
@@ -126,8 +127,34 @@ const fetchPendingOrders = async (retries = 2) => {
           }) 
         : [];
 
-      const pendingItems = sortedData.filter((item: any) => item.status === 'PENDING');
+// 🔥 แก้ไขจุดนี้จุดเดียว: โชว์ PENDING ตลอด และทิ้ง ORDERED ไว้ 1 วัน (24 ชั่วโมง) แล้วค่อยหายไป
+      const currentTime = new Date().getTime();
+      const oneDayInMs = 24 * 60 * 60 * 1000; // 24 ชั่วโมง
+
+      const pendingItems = sortedData.filter((item: any) => {
+        const status = item.status?.toString().trim().toUpperCase();
+
+        // 1. ถ้าเป็น PENDING ให้โชว์ปกติเสมอ
+        if (status === 'PENDING') return true;
+
+        // 2. ถ้าเป็น ORDERED ให้เช็คเวลาว่าไม่เกิน 24 ชั่วโมง
+        if (status === 'ORDERED') {
+          // ดึงค่าฟิลด์วันที่จัดซื้อ (Created_At_P หรือ Created_At)
+          const purchaseDateStr = item.Created_At_P || item.Created_At;
+          if (!purchaseDateStr) return false;
+
+          // แปลงวันที่ไทย พ.ศ. ให้คอมพิวเตอร์คำนวณได้ถูกต้องผ่านฟังก์ชันของพี่ชาย
+          const orderTime = parseThaiDate(purchaseDateStr);
+          
+          // ถ้าเวลาปัจจุบัน ลบ เวลาสั่งซื้อ ยังไม่เกิน 24 ชั่วโมง ให้ยอมให้โชว์บนหน้าจอหลัก
+          if (orderTime > 0 && currentTime - orderTime <= oneDayInMs) {
+            return true;
+          }
+        }
+        return false;
+      });
       
+      // นำข้อมูลที่กรองเสร็จแล้วมาจัดกลุ่มเข้า State batches เพื่อเอาไปวาดการ์ดหน้าจอหลัก
       const grouped = pendingItems.reduce((acc: any, item: any) => {
         const key = item.batchId || item.Group_ID || 'ทั่วไป';
         if (!acc[key]) acc[key] = [];
@@ -136,7 +163,6 @@ const fetchPendingOrders = async (retries = 2) => {
       }, {});
 
       setBatches(grouped);
-      
       //setCurrentPage(1); 
 
     } catch (err: any) {
@@ -151,6 +177,49 @@ const fetchPendingOrders = async (retries = 2) => {
     }
   };
 
+  const groupedItems = useMemo(() => {
+    const groups: { [key: string]: OrderItem[] } = {};
+    const currentTime = new Date().getTime();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+
+    items.forEach((item) => {
+      // ตรวจสอบเงื่อนไขการพิมพ์ค้นหา
+      const matchesSearch =
+        !searchTerm ||
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.Product_Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.Supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.batchId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.Group_ID?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      if (!matchesSearch) return;
+
+      const status = item.status?.toString().trim().toUpperCase();
+
+      // ถ้าเป็น PENDING ให้โชว์ปกติ
+      if (status === 'PENDING') {
+        const key = item.batchId || item.Group_ID || 'unbatched';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      }
+      // ถ้าเป็น ORDERED ให้เช็คเวลา 1 วันเพื่อให้โชว์ค้างบนหน้าหลักได้เลย
+      else if (status === 'ORDERED') {
+        const dateStr = item.Created_At_P || item.Created_At;
+        if (dateStr) {
+          const orderTime = parseThaiDate(dateStr);
+          if (orderTime > 0 && currentTime - orderTime <= oneDayInMs) {
+            const key = item.batchId || item.Group_ID || 'unbatched';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(item);
+          }
+        }
+      }
+    });
+
+    return groups;
+  }, [items, searchTerm]);
   useEffect(() => { 
     fetchPendingOrders();
     const interval = setInterval(fetchPendingOrders, 30000);
@@ -1020,7 +1089,7 @@ const submitAddMore = async () => {
                             <input 
                               type="number" 
                               className="w-12 bg-transparent text-slate-900 text-center font-black text-2xl outline-none" 
-                              value={item.orderCarton} 
+                              value={item.orderCarton || ''} 
                               onChange={e => {
                                 const newItems = [...reviewItems];
                                 newItems[idx].orderCarton = e.target.value;
