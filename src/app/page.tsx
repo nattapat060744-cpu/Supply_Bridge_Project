@@ -22,7 +22,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   const menus: MenuItem[] = [
-    { title: 'ฝ่ายจัดเรียง', desc: 'คีย์รายการของขาด / เช็คสต็อก', href: '/sorting', color: 'bg-blue-600', icon: '📋', deptKey: 'SORTING' },
+    { title: 'ฝ่ายธุรการคลัง', desc: 'คีย์รายการของขาด / เช็คสต็อก', href: '/sorting', color: 'bg-blue-600', icon: '📋', deptKey: 'SORTING' },
     { title: 'ฝ่ายจัดซื้อ', desc: 'อนุมัติสั่งซื้อ / ระบุหน่วยสินค้า', href: '/purchase', color: 'bg-green-600', icon: '💰', deptKey: 'PURCHASE' },
     { title: 'ฝ่ายสต็อก', desc: 'ตรวจรับสินค้าเข้าคลังจริง', href: '/stock', color: 'bg-amber-500', icon: '📦', deptKey: 'STOCK' },
   ];

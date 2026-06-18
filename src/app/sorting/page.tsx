@@ -92,7 +92,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
       A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
       D2: 'สถานะ', E2: 'สินค้าในล็อก', F2: 'สต็อก',
       G2: 'จำนวนที่สั่งซื้อ', G3: 'ว/ดป สั่งซื้อ', H3: 'จำนวน', I3: 'ลัง/มัด',
-      J3: 'จำนวน', K3: 'ชิ้น/โหล', L2: 'หมายเหตุ จัดซื้อ', M2: 'หมายเหตุ จัดเรียง'
+      J3: 'จำนวน', K3: 'ชิ้น/โหล', L2: 'หมายเหตุ จัดซื้อ', M2: 'หมายเหตุ ฝ่ายธุรการคลัง'
     };
     Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
 
@@ -677,7 +677,7 @@ const fetchStatus = async () => {
                 Sorting & Distribution Control
               </span>
               <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-none">
-                จัดการ <span className="text-blue-600 not-italic">จัดเรียงสินค้า</span>
+                จัดการ <span className="text-blue-600 not-italic">ฝ่ายธุรการคลัง</span>
               </h1>
               <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mt-6 flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
