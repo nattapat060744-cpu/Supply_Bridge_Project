@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SAMPENG SYSTEM",
-  description: "ระบบจัดการร้านสำเพ็ง",
+  title: "SPB Supply Bridge",
+  description: "ระบบจัดซื้อและตรวจรับสินค้าสำเพ็ง",
 };
 
 export default function RootLayout({
