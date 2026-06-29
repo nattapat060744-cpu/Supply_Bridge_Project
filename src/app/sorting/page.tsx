@@ -40,6 +40,14 @@ interface Notification {
   batchName: string;
 }
 
+interface DuplicateWarning {
+  isOpen: boolean;
+  productId: string;
+  productName: string;
+  existingOrder: string;
+  pendingAction?: () => void;
+}
+
 const parseThaiDate = (rawDate: string | number | Date) => {
   if (!rawDate) return new Date(0);
   
@@ -210,6 +218,14 @@ export default function SortingPage() {
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateWarning>({ 
+    isOpen: false, 
+    productId: '', 
+    productName: '', 
+    existingOrder: '',
+    pendingAction: undefined
+  });
+  const [tempFormData, setTempFormData] = useState<OrderItem | null>(null);
 
 const allFilteredBatchIds = useMemo(() => {
   const now = new Date().getTime();
@@ -542,9 +558,72 @@ const fetchStatus = async () => {
     if (!formData.id || !formData.name || formData.storeQty === '' || formData.warehouseQty === '') {
       return alert("กรอกข้อมูลให้ครบก่อนครับ (รหัส, ชื่อ, และจำนวน)");
     }
-    const newItem: OrderItem = { ...formData, tempId: Date.now() };
+    
+    // ตรวจสอบ Duplicate Order
+    checkDuplicateOrder(formData);
+  };
+
+  const checkDuplicateOrder = async (product: any) => {
+    try {
+      const res = await fetch('/api/order');
+      const orders = await res.json();
+      
+      // หา order ที่ Product_ID ตรงกัน และ ยังไม่ได้รับ (Recv_Date ว่าง)
+      // และ Status ไม่ใช่ COMPLETED หรือ REJECTED
+      const existingOrder = orders.find((order: any) => 
+        order.Product_ID === product.id && 
+        (!order.Recv_Date || order.Recv_Date.trim() === '') &&
+        order.Status !== 'COMPLETED' &&
+        order.Status !== 'REJECTED'
+      );
+      
+      if (existingOrder) {
+        // สร้างข้อความแสดงบิลพร้อมวันที่
+        let dateStr = '';
+        
+        // พยายามอ่านวันที่จากหลายที่
+        if (existingOrder.Created_At && existingOrder.Created_At.trim() !== '') {
+          try {
+            // ถ้า Created_At เป็น Thai date format เช่น "28/06/2569 10:30:00"
+            const date = parseThaiDate(existingOrder.Created_At);
+            if (!isNaN(date.getTime())) {
+              dateStr = date.toLocaleDateString('th-TH');
+            }
+          } catch (e) {
+            // ถ้า parse ไม่ได้ใช้วันที่เดิม
+            dateStr = existingOrder.Created_At;
+          }
+        }
+        
+        // ถ้าหาวันที่ไม่ได้ให้แสดงแค่ชื่อบิล
+        const billInfo = dateStr 
+          ? `${existingOrder.Group_Name || 'การสั่งซื้อ'} (${dateStr})`
+          : `${existingOrder.Group_Name || 'การสั่งซื้อ'}`;
+        
+        // เจอสินค้าที่ยังไม่ได้รับ - แสดง Warning Modal
+        setDuplicateWarning({
+          isOpen: true,
+          productId: product.id,
+          productName: product.name,
+          existingOrder: billInfo,
+          pendingAction: () => proceedAddItem(product)
+        });
+      } else {
+        // ไม่เจอสินค้าที่ค้างอยู่ - เพิ่มเข้าลิสต์เลย
+        proceedAddItem(product);
+      }
+    } catch (err) {
+      console.error("Error checking duplicate:", err);
+      // ถ้ามี error ให้เพิ่มแบบปกติ
+      proceedAddItem(product);
+    }
+  };
+
+  const proceedAddItem = (product: any) => {
+    const newItem: OrderItem = { ...product, tempId: Date.now() };
     setItems([...items, newItem]);
-    setFormData({ id: '', name: '', Status: 'PENDING', supplier: formData.supplier, storeQty: '', warehouseQty: '', note: '' });
+    setFormData({ id: '', name: '', Status: 'PENDING', supplier: '', storeQty: '', warehouseQty: '', note: '' });
+    setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' });
   };
 
   const submitBatch = async () => {
@@ -1311,6 +1390,66 @@ const fetchStatus = async () => {
             </div>
           </div>
 )}
+
+      {/* ⚠️ Duplicate Warning Modal */}
+      {duplicateWarning.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
+                ⚠️
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 italic uppercase mb-2">ระวัง!</h3>
+              <p className="text-amber-600 font-bold text-sm">สินค้านี้มีการสั่งอยู่แล้ว</p>
+            </div>
+
+            <div className="bg-amber-50 p-6 rounded-[25px] border-2 border-amber-200 mb-8 space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>
+                <p className="text-lg font-black text-slate-900">{duplicateWarning.productId}</p>
+              </div>
+              
+              <div className="h-px bg-amber-200"></div>
+              
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ชื่อสินค้า</p>
+                <p className="font-bold text-slate-700">{duplicateWarning.productName}</p>
+              </div>
+              
+              <div className="h-px bg-amber-200"></div>
+              
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📋 บิลที่สั่งอยู่</p>
+                <p className="font-bold text-slate-700 italic text-sm break-words">{duplicateWarning.existingOrder}</p>
+              </div>
+            </div>
+
+            <p className="text-center text-slate-600 font-bold text-sm mb-8">
+              สินค้านี้ยังไม่ได้รับจากผู้ขาย<br/>
+              คุณต้องการสั่งเพิ่มอีกหรือไม่?
+            </p>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' })}
+                className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                ❌ ยกเลิก
+              </button>
+              <button 
+                onClick={() => {
+                  if (duplicateWarning.pendingAction) {
+                    duplicateWarning.pendingAction();
+                  }
+                }}
+                className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-amber-600 text-white hover:bg-amber-700 transition-all active:scale-95 shadow-lg"
+              >
+                ✅ ใช่ สั่งเพิ่ม
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
     <style dangerouslySetInnerHTML={{ __html: `
