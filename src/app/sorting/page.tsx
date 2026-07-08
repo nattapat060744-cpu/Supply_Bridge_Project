@@ -1321,7 +1321,7 @@ const fetchStatus = async () => {
 
       {/* โ ๏ธ Duplicate Warning Modal */}
       {canManageSorting && duplicateWarning.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-200 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
             <div className="text-center mb-8">
               <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
@@ -1347,7 +1347,7 @@ const fetchStatus = async () => {
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>`r`n                <p className="font-bold text-slate-700 italic text-sm break-words">{duplicateWarning.existingOrder}</p>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>`r`n                <p className="font-bold text-slate-700 italic text-sm wrap-break-word">{duplicateWarning.existingOrder}</p>
               </div>
             </div>
 
