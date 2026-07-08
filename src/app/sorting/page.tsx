@@ -1,12 +1,26 @@
-'use client';
+﻿'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import IssueTracking from '@/components/IssueTracking';
 
 interface OrderItem {
   tempId?: number;
   id: string;
+  Product_ID?: string;
+  Product_Name?: string;
+  Supplier?: string;
+  Shop_Qty?: string | number;
+  Stock_Qty?: string | number;
+  Note_Request?: string;
+  Group_ID?: string;
+  Group_Name?: string;
+  Created_At?: string;
+  Order_Carton?: string | number;
+  Carton_Unit?: string;
+  Inner_Unit?: string;
+  Qty_Per_Carton?: string | number;
   name: string;
   supplier: string;
   Status?: string;
@@ -24,6 +38,7 @@ interface OrderItem {
   Recv_Carton_Unit?: string;
   qtyPerCarton?: string;
   Note_Purchase?: string;
+  notePurchase?: string;
   Recv_Carton?: string | number;
   Recv_Unit?: string;
   Recv_Qty?: string | number;
@@ -31,6 +46,8 @@ interface OrderItem {
   Note_Stock?: string;
   Recv_Date?: string; 
 }
+
+type DateBatchGroup = { batchId: string; items: OrderItem[] };
 
 interface Notification {
   id: string;
@@ -87,7 +104,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
 
     worksheet.mergeCells('A1:M1');
     const titleCell = worksheet.getCell('A1');
-    titleCell.value = `📦 เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
+    titleCell.value = `เอกสารขอสั่งซื้อสินค้า - ${batchItems[0].batchName || batchId}`;
     titleCell.font = { bold: true, size: 16, color: { argb: 'FF1B4332' } };
     titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(1).height = 35;
@@ -99,7 +116,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
     const h = {
       A2: 'รหัสสินค้า/บาร์โค้ด', B2: 'ชื่อสินค้า', C2: 'บริษัทซัพพลายเออร์',
       D2: 'สถานะ', E2: 'สินค้าในล็อก', F2: 'สต็อก',
-      G2: 'จำนวนที่สั่งซื้อ', G3: 'ว/ดป สั่งซื้อ', H3: 'จำนวน', I3: 'ลัง/มัด',
+      G2: 'จำนวนที่สั่งซื้อ', G3: 'ว/ด/ป สั่งซื้อ', H3: 'จำนวน', I3: 'ลัง/มัด',
       J3: 'จำนวน', K3: 'ชิ้น/โหล', L2: 'หมายเหตุ จัดซื้อ', M2: 'หมายเหตุ ฝ่ายธุรการคลัง'
     };
     Object.entries(h).forEach(([cell, val]) => worksheet.getCell(cell).value = val);
@@ -108,7 +125,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
       const row = worksheet.getRow(rowNum);
       row.height = 25;
       row.eachCell((cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เหลืองครีมอ่อน
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เน€เธซเธฅเธทเธญเธเธเธฃเธตเธกเธญเนเธญเธ
         cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         cell.border = {
@@ -160,19 +177,19 @@ const parseThaiDate = (rawDate: string | number | Date) => {
   });
 
   worksheet.columns = [
-    { width: 18 }, // รหัส
-    { width: 45 }, // ชื่อสินค้า (กว้างพิเศษ)
-    { width: 25 }, // ซัพพลายเออร์
+    { width: 18 }, // เธฃเธซเธฑเธช
+    { width: 45 }, // ชื่อสินค้า (เธเธงเนเธฒเธเธเธดเน€เธจเธฉ)
+    { width: 25 }, // เธเธฑเธเธเธฅเธฒเธขเน€เธญเธญเธฃเน
     { width: 15 }, // สถานะ
-    { width: 12 }, // ล็อก
+    { width: 12 }, // เธฅเนเธญเธ
     { width: 10 }, // สต็อก
-    { width: 15 }, // วันที่
+    { width: 15 }, // เธงเธฑเธเธ—เธตเน
     { width: 10 }, // จำนวน (ลัง)
-    { width: 10 }, // หน่วย
+    { width: 10 }, // เธซเธเนเธงเธข
     { width: 10 }, // จำนวน (ชิ้น)
-    { width: 10 }, // หน่วย
-    { width: 20 }, // หมายเหตุซื้อ
-    { width: 20 }  // หมายเหตุเรียง
+    { width: 10 }, // เธซเธเนเธงเธข
+    { width: 20 }, // หมายเหตุเธเธทเนเธญ
+    { width: 20 }  // หมายเหตุเน€เธฃเธตเธขเธ
   ];
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -187,13 +204,16 @@ export default function SortingPage() {
   const [loading, setLoading] = useState(true);
   const [expandedBatches, setExpandedBatches] = useState<{ [key: string]: boolean }>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentDepartment, setCurrentDepartment] = useState('');
+  const isReadOnlyViewer = currentDepartment === 'SORTING_VIEWER';
+  const canManageSorting = currentDepartment === 'SORTING' || currentDepartment === 'ADMIN' || currentDepartment === 'STOCK_SORTING_MANAGER';
+  const canExportSorting = canManageSorting || currentDepartment === 'SORTING_VIEWER';
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
   const previousDataRef = useRef<{ [key: string]: string }>({});
   const isInitialLoadRef = useRef(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const dismissedBatchesRef = useRef<Set<string>>(new Set()); 
   const lastAlertedSnapshotRef = useRef<{ [key: string]: string }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,7 +223,7 @@ export default function SortingPage() {
 
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [originalId, setOriginalId] = useState(''); // ✅ 1. เพิ่มบรรทัดนี้เพื่อล็อก ID เดิม
+  const [originalId, setOriginalId] = useState(''); // โ… 1. เน€เธเธดเนเธกเธเธฃเธฃเธ—เธฑเธ”เธเธตเนเน€เธเธทเนเธญเธฅเนเธญเธ ID เน€เธ”เธดเธก
 
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -284,25 +304,6 @@ const allFilteredBatchIds = useMemo(() => {
 
 }, [notifications, currentPage]); 
 
-  const discrepancyItems = useMemo(() => {
-    const allItems: OrderItem[] = Object.values(activeBatches).flat();
-    return allItems.filter((item) => {
-      const status = (item.status || '').toUpperCase();
-      const isOrdered = status === 'ORDERED' || status === 'COMPLETED' || status === 'RECEIVED';
-      if (!isOrdered) return false;
-
-      const hasStartedRecv = (item.Recv_Carton !== null && item.Recv_Carton !== undefined && item.Recv_Carton !== "");
-      if (!hasStartedRecv) return false;
-
-      const orderedCTN = Number(item.orderCarton || 0);
-      const receivedCTN = Number(item.Recv_Carton || 0);
-      const expectedQtyInside = Number(item.qtyPerCarton || 0);
-      const receivedQtyInside = Number(item.Recv_Qty || 0);
-
-      return (receivedCTN !== orderedCTN) || (receivedQtyInside !== expectedQtyInside);
-    });
-  }, [activeBatches]);
-
   const stats = useMemo(() => {
       const total = allFilteredBatchIds.length; 
       const ordered = allFilteredBatchIds.filter(bid => {
@@ -317,8 +318,7 @@ const allFilteredBatchIds = useMemo(() => {
 
       return { total, ordered, completed };
     }, [allFilteredBatchIds, activeBatches]);
-
-  const clearBatchNotifications = (batchId: string) => {
+const clearBatchNotifications = (batchId: string) => {
   setNotifications(prev => prev.filter(n => n.batchId !== batchId));
       
       const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
@@ -353,8 +353,48 @@ const allFilteredBatchIds = useMemo(() => {
     }, 100);
   };
 
+  useEffect(() => {
+    const latestNotification = notifications[0] || null;
+    const payload = {
+      count: notifications.length,
+      latestBatchId: latestNotification?.batchId,
+      latestBatchName: latestNotification?.batchName,
+      latestMessage: latestNotification?.productName,
+      updatedAt: Date.now(),
+      items: notifications.map((notification) => ({
+        id: notification.id,
+        batchId: notification.batchId,
+        batchName: notification.batchName,
+        message: notification.productName,
+      })),
+    };
+
+    localStorage.setItem('sorting_nav_notifications', JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent('sorting-notifications-changed', { detail: payload }));
+  }, [notifications]);
+
+  useEffect(() => {
+    const openLatestNotification = (event?: Event) => {
+      const customEvent = event as CustomEvent<{ batchId?: string }> | undefined;
+      const requestedBatchId = customEvent?.detail?.batchId || localStorage.getItem('pending_sorting_notification_batch') || '';
+      const targetNotification = notifications.find((notification) => notification.batchId === requestedBatchId) || notifications[0];
+
+      if (targetNotification) {
+        localStorage.removeItem('pending_sorting_notification_batch');
+        handleAcknowledge(targetNotification.batchId);
+      }
+    };
+
+    window.addEventListener('sorting-notification-open', openLatestNotification);
+
+    if (localStorage.getItem('pending_sorting_notification_batch')) {
+      openLatestNotification();
+    }
+
+    return () => window.removeEventListener('sorting-notification-open', openLatestNotification);
+  }, [notifications]);
   const trackChanges = (newData: OrderItem[]) => {
-      const batchUpdates: { [key: string]: { count: number; batchName: string, items: any[] } } = {};
+      const batchUpdates: { [key: string]: { count: number; batchName: string, items: OrderItem[] } } = {};
       let hasSnapshotChange = false;
 
 
@@ -394,15 +434,20 @@ const allFilteredBatchIds = useMemo(() => {
         });
 
         if (changeCount > 0 && !dismissed[bid]) {
-          const isAlreadyShowing = notifications.some(n => n.batchId === bid);
-          if (!isAlreadyShowing) {
-            setNotifications(prev => [{
+          if (lastAlertedSnapshotRef.current[bid] !== currentBatchString) {
+            lastAlertedSnapshotRef.current[bid] = currentBatchString;
+
+            setNotifications(prev => {
+              if (prev.some(n => n.batchId === bid)) return prev;
+
+              return [{
               id: `${Date.now()}-${bid}`,
               batchId: bid,
               batchName: info.batchName,
               productName: `พบอัปเดตใหม่ ${changeCount} รายการ`,
               message: `มีการแก้ไขข้อมูลในบิลนี้`
-            }, ...prev].slice(0, 5));
+              }, ...prev].slice(0, 5);
+            });
 
             if (audioRef.current) audioRef.current.play().catch(() => {});
             
@@ -428,14 +473,14 @@ const fetchStatus = async () => {
       const rawData = await res.json();
 
       const sortedData = Array.isArray(rawData) 
-        ? [...rawData].sort((a: any, b: any) => {
+        ? [...rawData].sort((a: OrderItem, b: OrderItem) => {
             const dateA = new Date(a.Created_At || 0).getTime();
             const dateB = new Date(b.Created_At || 0).getTime();
             return dateB - dateA;
           }) 
         : [];
 
-      const normalizedData: OrderItem[] = sortedData.map((item: any) => ({
+      const normalizedData: OrderItem[] = sortedData.map((item: OrderItem) => ({
         ...item,
         id: (item.id || item.Product_ID || '').toString(),
         name: item.Product_Name || item.name || 'ไม่มีชื่อสินค้า',
@@ -462,7 +507,7 @@ const fetchStatus = async () => {
 
       trackChanges(normalizedData);
 
-      const grouped = normalizedData.reduce((acc: any, item: OrderItem) => {
+      const grouped = normalizedData.reduce<Record<string, OrderItem[]>>((acc, item) => {
         const key = item.batchId || 'no-batch';
         if (!acc[key]) acc[key] = [];
         acc[key].push(item);
@@ -472,7 +517,7 @@ const fetchStatus = async () => {
       setActiveBatches(grouped);
       
     } catch (err) {
-      console.error("❌ Fetch status error:", err);
+      console.error("Fetch status error:", err);
     }
   };
 
@@ -511,8 +556,8 @@ const fetchStatus = async () => {
       if (typeof window === 'undefined') return;
 
       const savedUserStr = localStorage.getItem('user');
-      const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่จากเครื่องมา
-      const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
+      const lastLoginDate = localStorage.getItem('loginDate'); // 1. เธ”เธถเธเธงเธฑเธเธ—เธตเนเธเธฒเธเน€เธเธฃเธทเนเธญเธเธกเธฒ
+      const today = new Date().toLocaleDateString('th-TH');    // 2. เธชเธฃเนเธฒเธเธงเธฑเธเธ—เธตเนเธเธฑเธเธเธธเธเธฑเธ (เนเธ—เธข)
 
       if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
         router.push('/');
@@ -521,11 +566,13 @@ const fetchStatus = async () => {
 
       try {
         const savedUser = JSON.parse(savedUserStr);
-        if (!savedUser.name || (savedUser.department !== 'SORTING' && savedUser.department !== 'ADMIN')) {
+        const allowedDepartments = ['SORTING', 'ADMIN', 'SORTING_VIEWER', 'STOCK_SORTING_MANAGER'];
+        if (!savedUser.name || !allowedDepartments.includes(savedUser.department)) {
           alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
           router.push('/');
           return;
         }
+        setCurrentDepartment(savedUser.department);
 
         await fetchStatus(); 
       } catch (e) {
@@ -545,7 +592,12 @@ const fetchStatus = async () => {
       
       audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       
-      const interval = setInterval(fetchStatus, 30000);
+      const interval = setInterval(() => {
+        // โ… เนเธกเน poll เธ–เนเธฒเนเธ—เนเธเธเธตเนเธ–เธนเธเธเนเธญเธเธญเธขเธนเน เธเธฑเธ request เธ—เธตเนเนเธกเนเธเธณเน€เธเนเธ
+        if (document.visibilityState === 'visible') {
+          fetchStatus();
+        }
+      }, 30000);
       return () => clearInterval(interval);
     }, []);
 
@@ -559,18 +611,18 @@ const fetchStatus = async () => {
       return alert("กรอกข้อมูลให้ครบก่อนครับ (รหัส, ชื่อ, และจำนวน)");
     }
     
-    // ตรวจสอบ Duplicate Order
+    // เธ•เธฃเธงเธเธชเธญเธ Duplicate Order
     checkDuplicateOrder(formData);
   };
 
-  const checkDuplicateOrder = async (product: any) => {
+  const checkDuplicateOrder = async (product: OrderItem) => {
     try {
       const res = await fetch('/api/order');
       const orders = await res.json();
       
-      // หา order ที่ Product_ID ตรงกัน และ ยังไม่ได้รับ (Recv_Date ว่าง)
-      // และ Status ไม่ใช่ COMPLETED หรือ REJECTED
-      const existingOrder = orders.find((order: any) => 
+      // เธซเธฒ order เธ—เธตเน Product_ID เธ•เธฃเธเธเธฑเธ เนเธฅเธฐ เธขเธฑเธเนเธกเนเนเธ”เนเธฃเธฑเธ (Recv_Date เธงเนเธฒเธ)
+      // เนเธฅเธฐ Status เนเธกเนเนเธเน COMPLETED เธซเธฃเธทเธญ REJECTED
+      const existingOrder = orders.find((order: OrderItem) => 
         order.Product_ID === product.id && 
         (!order.Recv_Date || order.Recv_Date.trim() === '') &&
         order.Status !== 'COMPLETED' &&
@@ -578,29 +630,29 @@ const fetchStatus = async () => {
       );
       
       if (existingOrder) {
-        // สร้างข้อความแสดงบิลพร้อมวันที่
+        // เธชเธฃเนเธฒเธเธเนเธญเธเธงเธฒเธกเนเธชเธ”เธเธเธดเธฅเธเธฃเนเธญเธกเธงเธฑเธเธ—เธตเน
         let dateStr = '';
         
-        // พยายามอ่านวันที่จากหลายที่
+        // เธเธขเธฒเธขเธฒเธกเธญเนเธฒเธเธงเธฑเธเธ—เธตเนเธเธฒเธเธซเธฅเธฒเธขเธ—เธตเน
         if (existingOrder.Created_At && existingOrder.Created_At.trim() !== '') {
           try {
-            // ถ้า Created_At เป็น Thai date format เช่น "28/06/2569 10:30:00"
+            // เธ–เนเธฒ Created_At เน€เธเนเธ Thai date format เน€เธเนเธ "28/06/2569 10:30:00"
             const date = parseThaiDate(existingOrder.Created_At);
             if (!isNaN(date.getTime())) {
               dateStr = date.toLocaleDateString('th-TH');
             }
           } catch (e) {
-            // ถ้า parse ไม่ได้ใช้วันที่เดิม
+            // เธ–เนเธฒ parse เนเธกเนเนเธ”เนเนเธเนเธงเธฑเธเธ—เธตเนเน€เธ”เธดเธก
             dateStr = existingOrder.Created_At;
           }
         }
         
-        // ถ้าหาวันที่ไม่ได้ให้แสดงแค่ชื่อบิล
+        // เธ–เนเธฒเธซเธฒเธงเธฑเธเธ—เธตเนเนเธกเนเนเธ”เนเนเธซเนเนเธชเธ”เธเนเธเนเธเธทเนเธญเธเธดเธฅ
         const billInfo = dateStr 
-          ? `${existingOrder.Group_Name || 'การสั่งซื้อ'} (${dateStr})`
-          : `${existingOrder.Group_Name || 'การสั่งซื้อ'}`;
+          ? `${existingOrder.Group_Name || 'เธเธฒเธฃเธชเธฑเนเธเธเธทเนเธญ'} (${dateStr})`
+          : `${existingOrder.Group_Name || 'เธเธฒเธฃเธชเธฑเนเธเธเธทเนเธญ'}`;
         
-        // เจอสินค้าที่ยังไม่ได้รับ - แสดง Warning Modal
+        // เน€เธเธญเธชเธดเธเธเนเธฒเธ—เธตเนเธขเธฑเธเนเธกเนเนเธ”เนเธฃเธฑเธ - เนเธชเธ”เธ Warning Modal
         setDuplicateWarning({
           isOpen: true,
           productId: product.id,
@@ -609,17 +661,17 @@ const fetchStatus = async () => {
           pendingAction: () => proceedAddItem(product)
         });
       } else {
-        // ไม่เจอสินค้าที่ค้างอยู่ - เพิ่มเข้าลิสต์เลย
+        // เนเธกเนเน€เธเธญเธชเธดเธเธเนเธฒเธ—เธตเนเธเนเธฒเธเธญเธขเธนเน - เน€เธเธดเนเธกเน€เธเนเธฒเธฅเธดเธชเธ•เนเน€เธฅเธข
         proceedAddItem(product);
       }
     } catch (err) {
       console.error("Error checking duplicate:", err);
-      // ถ้ามี error ให้เพิ่มแบบปกติ
+      // เธ–เนเธฒเธกเธต error เนเธซเนเน€เธเธดเนเธกเนเธเธเธเธเธ•เธด
       proceedAddItem(product);
     }
   };
 
-  const proceedAddItem = (product: any) => {
+  const proceedAddItem = (product: OrderItem) => {
     const newItem: OrderItem = { ...product, tempId: Date.now() };
     setItems([...items, newItem]);
     setFormData({ id: '', name: '', Status: 'PENDING', supplier: '', storeQty: '', warehouseQty: '', note: '' });
@@ -627,7 +679,7 @@ const fetchStatus = async () => {
   };
 
   const submitBatch = async () => {
-      if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
+      if (items.length === 0 || !batchName.trim()) return alert("เธเธฃเธธเธ“เธฒเธ•เธฑเนเธเธเธทเนเธญเธฃเธญเธเนเธฅเธฐเน€เธเธดเนเธกเธชเธดเธเธเนเธฒเธเนเธญเธเธเธฃเธฑเธ");
       
       setIsSubmitting(true);
 
@@ -656,37 +708,38 @@ const fetchStatus = async () => {
         });
 
         if (res.ok) {
-          alert('🚀 ส่งบิลเรียบร้อยแล้วครับ!');
+          alert('ส่งบิลเรียบร้อยแล้วครับ!');
           setItems([]);
           setBatchName('');
           setIsModalOpen(false);
           if (typeof fetchStatus === 'function') fetchStatus();
         } else {
-          alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
+          alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเธชเนเธเธเนเธญเธกเธนเธฅเธเธฃเธฑเธ');
         }
       } catch (error) {
-        alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับ');
+        console.error('Error submitting items:', error);
+        alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญเธเธฃเธฑเธ');
       } finally {
         setIsSubmitting(false);
       }
     };
 
     const handleDeleteItem = async (item: OrderItem) => {
-    if (!confirm(`ยืนยันการลบรายการ "${item.name}" ใช่หรือไม่?`)) return;
+    if (!confirm(`เธขเธทเธเธขเธฑเธเธเธฒเธฃลบเธฃเธฒเธขเธเธฒเธฃ "${item.name}" เนเธเนเธซเธฃเธทเธญเนเธกเน?`)) return;
 
     try {
       const res = await fetch(`/api/order?id=${item.id}&groupId=${item.batchId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        alert('ลบรายการเรียบร้อย');
-        fetchStatus(); // ฟังก์ชันโหลดข้อมูลใหม่ที่พี่มีอยู่แล้ว
+        alert('ส่งบิลเรียบร้อยแล้วครับ!');
+        fetchStatus(); // เธเธฑเธเธเนเธเธฑเธเนเธซเธฅเธ”เธเนเธญเธกเธนเธฅเนเธซเธกเนเธ—เธตเนเธเธตเนเธกเธตเธญเธขเธนเนเนเธฅเนเธง
       } else {
-        alert('ลบไม่สำเร็จ');
+        alert('ลบเนเธกเนเธชเธณเน€เธฃเนเธ');
       }
     } catch (err) {
-      console.error(err);
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      console.error('Failed to delete item:', err);
+      alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญ');
     }
   };
 
@@ -699,8 +752,8 @@ const fetchStatus = async () => {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            oldId: originalId,           // ✅ ใช้ ID ดั้งเดิมที่เราล็อกไว้
-            id: editingItem.id,          // ค่า ID ใหม่จากช่อง Input
+            oldId: originalId,           // โ… เนเธเน ID เธ”เธฑเนเธเน€เธ”เธดเธกเธ—เธตเนเน€เธฃเธฒเธฅเนเธญเธเนเธงเน
+            id: editingItem.id,          // เธเนเธฒ ID เนเธซเธกเนเธเธฒเธเธเนเธญเธ Input
             groupId: editingItem.batchId,
             productName: editingItem.name,
             shopQty: Number(editingItem.storeQty),
@@ -711,164 +764,50 @@ const fetchStatus = async () => {
         });
 
         if (res.ok) {
-          alert('🚀 อัปเดตข้อมูลเรียบร้อย');
+          alert('ส่งบิลเรียบร้อยแล้วครับ!');
           setIsEditModalOpen(false);
           fetchStatus();
         } else {
           const errorData = await res.json();
-          alert(`❌ อัปเดตไม่สำเร็จ: ${errorData.error || 'ไม่พบรายการ'}`);
+          alert(`โ อัปเดตเนเธกเนเธชเธณเน€เธฃเนเธ: ${errorData.error || 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃ'}`);
         }
       } catch (err) {
-        console.error(err);
-        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        console.error('Failed to update item:', err);
+        alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญ');
       }
     };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
-      
-      {/* Notification Toast */}
-      <div className="fixed bottom-6 right-6 z-100 flex flex-col gap-3 w-full max-w-sm pointer-events-none">
-        {notifications.map((note) => (
-          <div key={note.id} className="pointer-events-auto bg-white border-l-4 border-blue-500 shadow-2xl p-4 rounded-2xl animate-in slide-in-from-right-full duration-500">
-            <div className="flex justify-between items-start mb-1">
-              <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">อัปเดต</span>
-              <button onClick={() => setNotifications(prev => prev.filter(n => n.id !== note.id))} className="text-slate-300 hover:text-slate-500">✕</button>
-            </div>
-            <h5 className="text-xs font-black text-slate-900 uppercase italic truncate">{note.batchName}</h5>
-            <p className="text-[10px] text-slate-500 font-bold mb-3">{note.productName}</p>
-            <button 
-              onClick={() => handleAcknowledge(note.batchId)}
-              className="w-full bg-slate-900 text-white text-[9px] font-black uppercase py-2 rounded-xl hover:bg-blue-600 transition-colors"
-            >
-              รับทราบ & ขยายดู
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div className="max-w-6xl mx-auto p-4 md:p-10">
+    <div className="app-shell font-sans pb-20">
+<div className="app-container">
         
         {/* Header Section */}
-          <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between bg-white p-8 md:p-12 rounded-[40px] shadow-sm relative overflow-hidden text-slate-900 border-b-8 border-blue-600">
+          <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-blue-600">
             <div className="relative z-10">
-              <span className="text-[12px] font-black text-blue-600 uppercase tracking-[0.4em] mb-3 block">
+              <span className="page-kicker text-blue-600 mb-3 block">
                 Sorting & Distribution Control
               </span>
-              <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-none">
+              <h1 className="page-title font-display">
                 จัดการ <span className="text-blue-600 not-italic">ฝ่ายธุรการคลัง</span>
               </h1>
-              <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mt-6 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+              <p className="page-subtitle mt-4 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500"></span>
                 ระบบติดตามสถานะสินค้า - สำเพ็ง บุรีรัมย์
               </p>
             </div>
+          {canManageSorting && (
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="mt-8 md:mt-0 bg-blue-600 hover:bg-slate-900 text-white px-10 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center gap-3"
+            className="primary-action bg-blue-600 text-white shadow-lg shadow-blue-600/15 hover:bg-slate-900 md:self-end"
           >
             <span className="text-xl">+</span> สร้างคำขอใหม่
           </button>
+          )}
         </div>
+        <IssueTracking items={Object.values(activeBatches).flat()} />
 
-{/* Issue Tracking Section (Fixed TypeScript Error) */}
-        <section className="mb-12">
-        {discrepancyItems.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3 px-2">
-              <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-red-500 rounded-full animate-pulse"></span>
-                ติดตามรายการที่มีปัญหา ({
-                  discrepancyItems
-                    .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
-                    .filter((item, index, self) => 
-                      // แก้ไขจาก productID เป็น id ตาม Interface OrderItem
-                      index === self.findIndex((t) => t.id === item.id)
-                    ).length
-                })
-              </h2>
-              <span className="text-[9px] font-bold text-slate-400 italic">เลื่อนดูรายการ ↔</span>
-            </div>
-            
-            <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar-h snap-x">
-              {discrepancyItems
-                .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
-                .filter((item, index, self) => 
-                  // แก้ไขจาก productID เป็น id เพื่อความถูกต้องของ Type[cite: 3]
-                  index === self.findIndex((t) => t.id === item.id)
-                )
-                .map((item, idx) => {
-                  const diffCarton = Number(item.Recv_Carton || 0) - Number(item.orderCarton || 0);
-                  const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
-                  
-                  return (
-                    <div key={`issue-${item.id || idx}`} className="shrink-0 w-72 snap-start bg-white p-5 rounded-[28px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all group">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-1">
-                          <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-1 rounded-lg uppercase">
-                            ID: {item.id}
-                          </span>
-                          {item.supplier && (
-                            <span className="bg-slate-50 text-slate-400 text-[10px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-20">
-                              {item.supplier}
-                            </span>
-                          )}
-                        </div>
+        
 
-                        <div className="flex flex-col items-end gap-1">
-                          {diffCarton !== 0 && (
-                            <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
-                              {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
-                            </span>
-                          )}
-                          {diffInner !== 0 && (
-                            <span className={`text-[9px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                              {diffInner < 0 ? `ขาดในกล่อง ${Math.abs(diffInner)}` : `เกินในกล่อง ${diffInner}`} {item.Recv_Qty_Unit}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <h4 className="font-black text-slate-800 text-[12px] uppercase italic truncate mb-4 group-hover:text-red-500 transition-colors">
-                        {item.name}
-                      </h4>
-
-                      <div className="bg-slate-50 rounded-2xl p-3 mb-3 border border-slate-100">
-                        <div className="flex justify-between text-[10px] mb-1">
-                          <span className="text-slate-400 uppercase font-black">สั่งซื้อ</span>
-                          <span className="text-slate-900 font-black">{item.orderCarton} {item.cartonUnit} <span className="text-slate-400">(+{item.qtyPerCarton || 0})</span></span>
-                        </div>
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-red-500 uppercase font-black underline decoration-red-200 underline-offset-2">รับจริง</span>
-                          <span className="text-red-600 font-black">{item.Recv_Carton} {item.Recv_Carton_Unit} <span className="text-red-400">(+{item.Recv_Qty || 0})</span></span>
-                        </div>
-                      </div>
-
-                      {item.Note_Stock && (
-                        <div className="mb-3 px-3 py-2 bg-red-50 rounded-xl border border-red-100">
-                          <p className="text-[9px] text-red-700 font-bold leading-tight">
-                            📝 {item.Note_Stock}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-50">
-                        <span className="text-[8px] text-slate-300 font-black uppercase italic">
-                          {item.batchName?.split('(')[0] || 'ไม่ระบุรอบ'}
-                        </span>
-                        {item.Recv_Date && (
-                          <span className="text-[9px] text-slate-400 font-black">
-                            {item.Recv_Date.split(' ')[0]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-              })}
-            </div>
-          </div>
-        )}
-        </section>
 
         {/* Stats & Search */}
         <div className="mb-8 flex flex-col md:flex-row gap-4">
@@ -877,13 +816,13 @@ const fetchStatus = async () => {
             <input 
               type="text" 
               placeholder="ค้นหาบิล หรือชื่อสินค้า..." 
-              className="w-full bg-white border border-slate-100 p-6 pl-16 rounded-3xl font-bold outline-none focus:ring-4 ring-blue-500/10 shadow-sm transition-all text-lg placeholder:text-slate-300"
+              className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm || ''}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex items-center justify-center gap-4 min-w-55">
-            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">📦</div>
+          <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-55">
+            <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center text-xs font-black text-blue-600">บิล</div>
             <div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">บิลทั้งหมด</p>
               <p className="text-2xl font-black text-blue-600 leading-none">{stats.total}</p>
@@ -910,22 +849,22 @@ const fetchStatus = async () => {
               {Object.entries(groupedByDate).map(([dateLabel, batchesInDate]) => (
                 <div key={dateLabel} className="space-y-6">
                   
-                  {/* --- ส่วนหัวข้อวันที่ (Date Header) --- */}
+                  {/* --- เธชเนเธงเธเธซเธฑเธงเธเนเธญเธงเธฑเธเธ—เธตเน (Date Header) --- */}
                   <div className="flex items-center gap-4 py-4">
                     <div className="h-px flex-1 bg-slate-200"></div>
                     <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
-                      <span className="text-lg">📅</span>
+                      <span className="text-xs font-black text-slate-400">รายการของวันที่:</span>
                       <span className="text-sm font-black text-slate-600 uppercase tracking-tight">
-                        รายการของวันที่: {dateLabel}
+                         {dateLabel}
                       </span>
                     </div>
                     <div className="h-px flex-1 bg-slate-200"></div>
                   </div>
 
-                  {/* รายการบิลของวันนั้นๆ */}
-                  {/* batchesInDate อาจจะเป็น Array ของ string หรือ object ขึ้นอยู่กับโครงสร้าง groupedByDate ของพี่ชาย */}
-                  {/* ในที่นี้ผมแก้ให้รองรับทั้งแบบ string และแบบที่มี .batchId ครับ */}
-                  {batchesInDate.map((item: any) => {
+                  {/* เธฃเธฒเธขเธเธฒเธฃเธเธดเธฅเธเธญเธเธงเธฑเธเธเธฑเนเธเน */}
+                  {/* batchesInDate เธญเธฒเธเธเธฐเน€เธเนเธ Array เธเธญเธ string เธซเธฃเธทเธญ object เธเธถเนเธเธญเธขเธนเนเธเธฑเธเนเธเธฃเธเธชเธฃเนเธฒเธ groupedByDate เธเธญเธเธเธตเนเธเธฒเธข */}
+                  {/* เนเธเธ—เธตเนเธเธตเนเธเธกเนเธเนเนเธซเนเธฃเธญเธเธฃเธฑเธเธ—เธฑเนเธเนเธเธ string เนเธฅเธฐเนเธเธเธ—เธตเนเธกเธต .batchId เธเธฃเธฑเธ */}
+                  {batchesInDate.map((item: string | DateBatchGroup) => {
                     const batchId = typeof item === 'string' ? item : item.batchId;
                     const batchItems = activeBatches[batchId];
                     if (!batchItems) return null;
@@ -943,7 +882,7 @@ const fetchStatus = async () => {
                     const isStep4Active = batchItems.length > 0 && batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
 
                     let currentIcon = '🛒';
-                    let statusBgColor = 'bg-blue-500';
+                    const statusBgColor = 'bg-blue-500';
 
                     if (isStep4Active) {
                       currentIcon = '🏁';
@@ -955,16 +894,16 @@ const fetchStatus = async () => {
 
                     const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));
                     return (
-                      <div key={batchId} id={`batch-${batchId}`} className={`rounded-[40px] overflow-hidden transition-all border border-slate-100 ${isExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-white/60 hover:bg-white'}`}>
+                      <div key={batchId} id={`batch-${batchId}`} className={`app-card overflow-hidden transition-all ${isExpanded ? 'bg-white' : 'bg-white/80 hover:bg-white'}`}>
                         <div 
                           onClick={() => {
                             const nextExpanded = !isExpanded;
                             setExpandedBatches((prev: Record<string, boolean>) => ({ ...prev, [batchId]: nextExpanded }));
-                            if (nextExpanded) clearBatchNotifications(batchId);
+                            if (nextExpanded && !isReadOnlyViewer) clearBatchNotifications(batchId);
                           }}
                           className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors cursor-pointer ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
                         >
-                          {/* ฝั่งซ้าย: ไอคอนและชื่อบิล */}
+                          {/* เธเธฑเนเธเธเนเธฒเธข: เนเธญเธเธญเธเนเธฅเธฐเธเธทเนเธญเธเธดเธฅ */}
                           <div className="flex items-center gap-6">
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative transition-all duration-300 ${
                               isExpanded ? 'bg-blue-600' : statusBgColor
@@ -987,8 +926,9 @@ const fetchStatus = async () => {
                             </div>
                           </div>
 
-                          {/* ฝั่งขวา: ปุ่ม Export และ ลูกศร (รวมกลุ่มกัน) */}
+                          {/* เธเธฑเนเธเธเธงเธฒ: เธเธธเนเธก Export เนเธฅเธฐ เธฅเธนเธเธจเธฃ (เธฃเธงเธกเธเธฅเธธเนเธกเธเธฑเธ) */}
                           <div className="flex items-center gap-4">
+                            {canExportSorting && (
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -996,29 +936,29 @@ const fetchStatus = async () => {
                               }}
                               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20 whitespace-nowrap"
                             >
-                              <span>📊</span>
-                              <span className="hidden md:inline">EXPORT EXCEL</span>
+                              <span>📊</span><span className="hidden md:inline">EXPORT EXCEL</span>
                             </button>
+                            )}
 
                             <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>
-                              ↓
+                              ↑
                             </div>
                           </div>
                         </div>
 
                         {isExpanded && (
                           <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
-                            <div className="max-w-3xl mx-auto bg-white p-8 rounded-[35px] shadow-sm border border-slate-100">
+                            <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                               <div className="relative flex justify-between items-center px-6">
                                 <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
                                 
-                                {/* จุดที่ 1: สร้างคำขอ */}
+                                {/* เธเธธเธ”เธ—เธตเน 1: สร้างคำขอ */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
                                   <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
                                 </div>
 
-                                {/* จุดที่ 2: สั่งซื้อแล้ว */}
+                                {/* เธเธธเธ”เธ—เธตเน 2: สั่งซื้อแล้ว */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep2Active ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -1026,7 +966,7 @@ const fetchStatus = async () => {
                                   <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep2Active ? 'text-emerald-600' : 'text-slate-300'}`}>สั่งซื้อแล้ว</span>
                                 </div>
 
-                                {/* จุดที่ 3: กำลังส่ง */}
+                                {/* เธเธธเธ”เธ—เธตเน 3: กำลังส่ง */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep3Active ? 'bg-amber-500 text-white animate-pulse shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -1034,7 +974,7 @@ const fetchStatus = async () => {
                                   <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep3Active ? 'text-amber-600' : 'text-slate-300'}`}>กำลังส่ง</span>
                                 </div>
 
-                                {/* จุดที่ 4: เรียบร้อย */}
+                                {/* เธเธธเธ”เธ—เธตเน 4: เรียบร้อย */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep4Active ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -1045,7 +985,7 @@ const fetchStatus = async () => {
                             </div>
 
                             {/* Items Table */}
-                            <div className="bg-white rounded-[35px] border border-slate-100 overflow-hidden shadow-sm">
+                            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
                               <div className="hidden md:block px-10 py-5 bg-slate-900">
                                 <div className="flex items-center gap-6">
                                   <div className="flex-1 text-white text-[10px] font-black uppercase tracking-[0.2em] italic">ชื่อสินค้า / รายละเอียด</div>
@@ -1089,7 +1029,7 @@ const fetchStatus = async () => {
                                                 {order.qtyPerCarton || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.innerUnit || 'ชิ้น'}</span>
                                               </div>
                                             </div>
-                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอจัดซื้อ</span>}
+                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอเข้าคลัง</span>}
                                         </div>
 
                                         <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
@@ -1125,7 +1065,7 @@ const fetchStatus = async () => {
                                           </div>
                                         </div>
 
-                                        {/* แก้ไขส่วน Status และเพิ่มปุ่มจัดการ */}
+                                        {/* แก้ไขเธชเนเธงเธ Status เนเธฅเธฐเน€เธเธดเนเธกเธเธธเนเธกจัดการ */}
                                         <div className="flex flex-col gap-2 w-full md:w-32">
                                           <div className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
                                               order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -1139,8 +1079,8 @@ const fetchStatus = async () => {
                                             order.status === 'ORDERED' ? '🚚 กำลังส่ง' : '⏳ รอจัดซื้อ'}
                                           </div>
                                           
-                                          {/* ปุ่มจัดการรายการ (แสดงเฉพาะเมื่อยังไม่ COMPLETED) */}
-                                          {order.status !== 'COMPLETED' && (
+                                          {/* เธเธธเนเธกจัดการเธฃเธฒเธขเธเธฒเธฃ (เนเธชเธ”เธเน€เธเธเธฒเธฐเน€เธกเธทเนเธญเธขเธฑเธเนเธกเน COMPLETED) */}
+                                          {canManageSorting && order.status !== 'COMPLETED' && (
                                             <div className="flex gap-1">
                                               <button 
                                                 onClick={() => { setEditingItem(order); setOriginalId(order.id); setIsEditModalOpen(true); }}
@@ -1174,17 +1114,17 @@ const fetchStatus = async () => {
           )}
         </section>
 
- {isEditModalOpen && editingItem && (
+ {canManageSorting && isEditModalOpen && editingItem && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-4">
             <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border-t-8 border-blue-600">
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
                 <h2 className="text-xl font-black uppercase italic">แก้ไขข้อมูลสินค้า</h2>
-                <button onClick={() => setIsEditModalOpen(false)} className="text-xl hover:rotate-90 transition-transform">✕</button>
+                <button onClick={() => setIsEditModalOpen(false)} className="text-xl hover:rotate-90 transition-transform">x</button>
               </div>
 
               <form onSubmit={handleUpdateItem} className="p-8 space-y-4">
                 <div className="grid grid-cols-3 gap-4">
-                  {/* เพิ่มช่องแก้รหัสสินค้า */}
+                  {/* เน€เธเธดเนเธกเธเนเธญเธเนเธเนเธฃเธซเธฑเธชเธชเธดเธเธเนเธฒ */}
                   <div className="col-span-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">รหัสสินค้า (ID)</label>
                     <input 
@@ -1193,7 +1133,7 @@ const fetchStatus = async () => {
                       onChange={(e) => setEditingItem({...editingItem, id: e.target.value})} 
                     />
                   </div>
-                  {/* เพิ่มช่องแก้ซัพพลายเออร์ */}
+                  {/* เน€เธเธดเนเธกเธเนเธญเธเนเธเนเธเธฑเธเธเธฅเธฒเธขเน€เธญเธญเธฃเน */}
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ซัพพลายเออร์ (Supplier)</label>
                     <input 
@@ -1215,18 +1155,14 @@ const fetchStatus = async () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>
-                    <input 
-                      type="number" 
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>`r`n                    <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.storeQty} 
                       onChange={(e) => setEditingItem({...editingItem, storeQty: e.target.value})} 
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ในคลัง</label>
-                    <input 
-                      type="number" 
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>`r`n                    <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.warehouseQty} 
                       onChange={(e) => setEditingItem({...editingItem, warehouseQty: e.target.value})} 
@@ -1244,9 +1180,7 @@ const fetchStatus = async () => {
                   />
                 </div>
 
-                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl uppercase text-[11px] tracking-widest hover:bg-slate-900 shadow-lg transition-all active:scale-[0.98]">
-                  บันทึกการแก้ไขข้อมูล
-                </button>
+                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl uppercase text-[11px] tracking-widest hover:bg-slate-900 shadow-lg transition-all active:scale-[0.98]">บันทึกการแก้ไขข้อมูล</button>
               </form>
             </div>
           </div>
@@ -1259,9 +1193,7 @@ const fetchStatus = async () => {
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ← ก่อนหน้า
-            </button>
+            >← ก่อนหน้า</button>
             <div className="flex gap-1 items-center">
               {(() => {
                 const pages = [];
@@ -1288,31 +1220,29 @@ const fetchStatus = async () => {
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ถัดไป →
-            </button>
+            >ถัดไป →</button>
           </div>
         )}
 
         {/* Modal: New Batch (Style adjusted) */}
-        {isModalOpen && (
+        {canManageSorting && isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-100 p-4">
-            {/* ล็อกความสูงสูงสุดที่ 90% ของหน้าจอ */}
+            {/* เธฅเนเธญเธเธเธงเธฒเธกเธชเธนเธเธชเธนเธเธชเธธเธ”เธ—เธตเน 90% เธเธญเธเธซเธเนเธฒเธเธญ */}
             <div className="bg-white rounded-[45px] shadow-2xl w-full max-w-5xl overflow-hidden max-h-[90vh] flex flex-col border-t-8 border-blue-600 animate-in fade-in zoom-in-95 duration-300">
               
-              {/* Header: ติดอยู่กับที่ */}
+              {/* Header: เธ•เธดเธ”เธญเธขเธนเนเธเธฑเธเธ—เธตเน */}
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
                 <div>
                   <h2 className="text-2xl font-black uppercase italic tracking-tighter">สร้าง <span className="text-blue-500 not-italic">บิลสั่งซื้อใหม่</span></h2>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">ระบุรายละเอียดสินค้าที่ต้องการสั่งครับ</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-rose-600 transition-colors text-xl">✕</button>
+                <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-rose-600 transition-colors text-xl">x</button>
               </div>
 
-              {/* Body: แบ่งซ้าย-ขวา และเลื่อนเฉพาะข้างใน */}
+              {/* Body: เนเธเนเธเธเนเธฒเธข-เธเธงเธฒ เนเธฅเธฐเน€เธฅเธทเนเธญเธเน€เธเธเธฒเธฐเธเนเธฒเธเนเธ */}
               <div className="flex flex-col md:flex-row overflow-hidden flex-1">
                 
-                {/* ฝั่งซ้าย: ฟอร์มกรอกข้อมูล (Scrollable) */}
+                {/* เธเธฑเนเธเธเนเธฒเธข: เธเธญเธฃเนเธกเธเธฃเธญเธเธเนเธญเธกเธนเธฅ (Scrollable) */}
                 <div className="flex-1 p-8 space-y-6 overflow-y-auto custom-scrollbar border-r border-slate-100">
                   <div className="bg-blue-50/50 p-6 rounded-[30px] border border-blue-100">
                     <label className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] block mb-2 ml-1">1. ชื่อรอบการสั่งซื้อ</label>
@@ -1333,7 +1263,7 @@ const fetchStatus = async () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">หน้าร้าน:</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">ในคลัง:</span>
                           <input type="number" className="w-full p-4 pl-16 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" value={formData.storeQty} onChange={(e) => setFormData({...formData, storeQty: e.target.value})} required />
                         </div>
                         <div className="relative">
@@ -1343,25 +1273,23 @@ const fetchStatus = async () => {
                       </div>
                       <input className="w-full p-4 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" placeholder="ชื่อซัพพลายเออร์ (ถ้าทราบ)" value={formData.supplier} onChange={(e) => setFormData({...formData, supplier: e.target.value})} />
                       <textarea className="w-full p-4 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" placeholder="หมายเหตุถึงจัดซื้อ..." rows={2} value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
-                      <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-lg">
-                        + เพิ่มเข้าบิล
-                      </button>
+                      <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-lg">+ เพิ่มเข้าบิล</button>
                     </form>
                   </div>
                 </div>
 
-                {/* ฝั่งขวา: รายการที่เลือกแล้ว (Fixed Section) */}
+                {/* เธเธฑเนเธเธเธงเธฒ: เธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเน€เธฅเธทเธญเธเนเธฅเนเธง (Fixed Section) */}
                 <div className="w-full md:w-95 bg-slate-50 p-8 flex flex-col shrink-0">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">รายการในบิล ({items.length})</p>
                     {items.length > 0 && <button onClick={() => setItems([])} className="text-[9px] font-black text-rose-500 uppercase hover:underline">ล้างทั้งหมด</button>}
                   </div>
                   
-                  {/* รายการสินค้าที่เลื่อนได้ภายในพื้นที่ที่เหลือ */}
+                  {/* เธฃเธฒเธขเธเธฒเธฃเธชเธดเธเธเนเธฒเธ—เธตเนเน€เธฅเธทเนเธญเธเนเธ”เนเธ เธฒเธขเนเธเธเธทเนเธเธ—เธตเนเธ—เธตเนเน€เธซเธฅเธทเธญ */}
                   <div className="flex-1 overflow-y-auto space-y-2 pr-2 mb-6 custom-scrollbar">
                     {items.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[30px] text-slate-300 p-6 text-center">
-                        <span className="text-3xl mb-2">📥</span>
+                        <span className="text-3xl mb-2">+</span>
                         <p className="font-black text-[9px] uppercase tracking-widest leading-loose">เพิ่มสินค้าจากด้านซ้าย<br/>เพื่อเริ่มสร้างบิลครับ</p>
                       </div>
                     ) : (
@@ -1371,19 +1299,19 @@ const fetchStatus = async () => {
                             <span className="font-black text-xs uppercase italic text-slate-700 block truncate">{item.name}</span>
                             <span className="text-[9px] font-bold text-slate-400 uppercase">สต็อก: {item.storeQty}/{item.warehouseQty}</span>
                           </div>
-                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors flex items-center justify-center text-[10px]">✕</button>
+                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors flex items-center justify-center text-[10px]">x</button>
                         </div>
                       ))
                     )}
                   </div>
 
-                  {/* ปุ่มกดยืนยัน (ติดอยู่กับขอบล่างของ Modal) */}
+                  {/* เธเธธเนเธกเธเธ”เธขเธทเธเธขเธฑเธ (เธ•เธดเธ”เธญเธขเธนเนเธเธฑเธเธเธญเธเธฅเนเธฒเธเธเธญเธ Modal) */}
                   <button 
                     onClick={submitBatch} 
                     disabled={items.length === 0 || !batchName || isSubmitting}
                     className={`w-full py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl transition-all active:scale-95 ${items.length > 0 && !isSubmitting ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                   >
-                    {isSubmitting ? 'กำลังส่งข้อมูล... ⏳' : '🚀 ส่งบิลเดี๋ยวนี้'}
+                    {isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งบิลเดี๋ยวนี้'}
                   </button>
                 </div>
               </div>
@@ -1391,13 +1319,13 @@ const fetchStatus = async () => {
           </div>
 )}
 
-      {/* ⚠️ Duplicate Warning Modal */}
-      {duplicateWarning.isOpen && (
+      {/* โ ๏ธ Duplicate Warning Modal */}
+      {canManageSorting && duplicateWarning.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
             <div className="text-center mb-8">
               <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
-                ⚠️
+                โ ๏ธ
               </div>
               <h3 className="text-2xl font-black text-slate-900 italic uppercase mb-2">ระวัง!</h3>
               <p className="text-amber-600 font-bold text-sm">สินค้านี้มีการสั่งอยู่แล้ว</p>
@@ -1412,40 +1340,22 @@ const fetchStatus = async () => {
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ชื่อสินค้า</p>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>
                 <p className="font-bold text-slate-700">{duplicateWarning.productName}</p>
               </div>
               
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📋 บิลที่สั่งอยู่</p>
-                <p className="font-bold text-slate-700 italic text-sm break-words">{duplicateWarning.existingOrder}</p>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>`r`n                <p className="font-bold text-slate-700 italic text-sm break-words">{duplicateWarning.existingOrder}</p>
               </div>
             </div>
 
-            <p className="text-center text-slate-600 font-bold text-sm mb-8">
-              สินค้านี้ยังไม่ได้รับจากผู้ขาย<br/>
-              คุณต้องการสั่งเพิ่มอีกหรือไม่?
-            </p>
+            <p className="text-center text-slate-600 font-bold text-sm mb-8">สินค้านี้ยังไม่ได้รับจากผู้ขาย<br/>คุณต้องการสั่งเพิ่มอีกหรือไม่?</p>
 
             <div className="flex gap-4">
-              <button 
-                onClick={() => setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' })}
-                className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
-              >
-                ❌ ยกเลิก
-              </button>
-              <button 
-                onClick={() => {
-                  if (duplicateWarning.pendingAction) {
-                    duplicateWarning.pendingAction();
-                  }
-                }}
-                className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-amber-600 text-white hover:bg-amber-700 transition-all active:scale-95 shadow-lg"
-              >
-                ✅ ใช่ สั่งเพิ่ม
-              </button>
+              <button onClick={() => setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' })} className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95">ยกเลิก</button>
+              <button onClick={() => { if (duplicateWarning.pendingAction) { duplicateWarning.pendingAction(); } }} className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-amber-600 text-white hover:bg-amber-700 transition-all active:scale-95 shadow-lg">ใช่ สั่งเพิ่ม</button>
             </div>
           </div>
         </div>
@@ -1464,3 +1374,9 @@ const fetchStatus = async () => {
     </div>
   );
 }
+
+
+
+
+
+

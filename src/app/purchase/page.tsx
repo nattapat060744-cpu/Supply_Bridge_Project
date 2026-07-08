@@ -1,9 +1,13 @@
 'use client';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import IssueTracking from '@/components/IssueTracking';
 
 interface OrderItem {
+  ID?: string;
+  rowNumber?: string | number;
   id: string;
+  rowUid?: string;
   productId?: string;
   Product_ID?: string;
   productID?: string;
@@ -22,8 +26,11 @@ interface OrderItem {
   Group_ID?: string;
   orderCarton?: string;
   qtyPerCarton?: string;
+  Qty_Per_Carton?: string;
   cartonUnit?: string;
+  Carton_Unit?: string;
   innerUnit?: string;
+  Inner_Unit?: string;
   notePurchase?: string;
   isRejected?: boolean;
   status?: string;
@@ -35,8 +42,9 @@ interface OrderItem {
   storeQty?: string;
   note?: string;
   Recv_Date?: string;
-  notePur ?: string;
+  notePur?: string;
   Created_At?: string;
+  createdAt?: string;
   Created_At_P?: string;
 }
 
@@ -73,36 +81,12 @@ export default function PurchasePage() {
 
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [targetGroupId, setTargetGroupId] = useState('');
-  
-  const discrepancyItems = useMemo(() => {
-    if (!rawData) return [];
-    return rawData.filter((item: OrderItem) => {
-      const status = (item.status || '').toUpperCase();
-      const isProcessed = status === 'ORDERED' || status === 'COMPLETED' || status === 'RECEIVED';
-      if (!isProcessed) return false;
-
-      const hasStartedRecv = (item.recvCarton !== null && item.recvCarton !== undefined && item.recvCarton !== "") ||
-                             (item.Recv_Qty !== null && item.Recv_Qty !== undefined && item.Recv_Qty !== "");
-      
-      if (!hasStartedRecv) return false;
-
-      const orderedCTN = Number(item.orderCarton || 0);
-      const receivedCTN = Number(item.recvCarton || 0);
-      const expectedQtyInside = Number(item.qtyPerCarton || 0);
-      const receivedQtyInside = Number(item.Recv_Qty || 0);
-
-      const isCartonMismatch = (receivedCTN !== orderedCTN);
-      const isQtyInsideMismatch = (receivedQtyInside !== expectedQtyInside);
-
-      return isCartonMismatch || isQtyInsideMismatch;
-    });
-  }, [rawData]);
 
 const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
 const [existingItems, setExistingItems] = useState<OrderItem[]>([]); // สำหรับโชว์เท่านั้น
 
-const [selectedBatch, setSelectedBatch] = useState<any>(null);
+const [selectedBatch, setSelectedBatch] = useState<OrderItem[] | null>(null);
 
 const fetchPendingOrders = async (retries = 2) => {
     const controller = new AbortController();
@@ -120,7 +104,7 @@ const fetchPendingOrders = async (retries = 2) => {
       setRawData(data);
 
       const sortedData = Array.isArray(data) 
-        ? [...data].sort((a: any, b: any) => {
+        ? [...data].sort((a: OrderItem, b: OrderItem) => {
             const dateA = new Date(a.Created_At || a.createdAt || 0).getTime();
             const dateB = new Date(b.Created_At || b.createdAt || 0).getTime();
             return dateB - dateA;
@@ -131,7 +115,7 @@ const fetchPendingOrders = async (retries = 2) => {
       const currentTime = new Date().getTime();
       const oneDayInMs = 24 * 60 * 60 * 1000; // 24 ชั่วโมง
 
-      const pendingItems = sortedData.filter((item: any) => {
+      const pendingItems = sortedData.filter((item: OrderItem) => {
         const status = item.status?.toString().trim().toUpperCase();
 
         // 1. ถ้าเป็น PENDING ให้โชว์ปกติเสมอ
@@ -155,7 +139,7 @@ const fetchPendingOrders = async (retries = 2) => {
       });
       
       // นำข้อมูลที่กรองเสร็จแล้วมาจัดกลุ่มเข้า State batches เพื่อเอาไปวาดการ์ดหน้าจอหลัก
-      const grouped = pendingItems.reduce((acc: any, item: any) => {
+      const grouped = pendingItems.reduce<Record<string, OrderItem[]>>((acc, item) => {
         const key = item.batchId || item.Group_ID || 'ทั่วไป';
         if (!acc[key]) acc[key] = [];
         acc[key].push(item);
@@ -165,12 +149,13 @@ const fetchPendingOrders = async (retries = 2) => {
       setBatches(grouped);
       //setCurrentPage(1); 
 
-    } catch (err: any) {
-      if (retries > 0 && err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      console.error('Error updating items:', err);
+      if (retries > 0 && !isAbortError(err)) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         return fetchPendingOrders(retries - 1);
       }
-      console.error(err);
+      console.error('Failed to fetch pending orders:', err);
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -222,7 +207,12 @@ const fetchPendingOrders = async (retries = 2) => {
   }, [items, searchTerm]);
   useEffect(() => { 
     fetchPendingOrders();
-    const interval = setInterval(fetchPendingOrders, 30000);
+    const interval = setInterval(() => {
+      // ✅ ไม่ poll ถ้าแท็บนี้ถูกซ่อนอยู่ (สลับไปแท็บอื่น/ย่อหน้าต่าง) กัน request ที่ไม่จำเป็น
+      if (document.visibilityState === 'visible') {
+        fetchPendingOrders();
+      }
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -270,7 +260,7 @@ useEffect(() => {
   }, [router]);
 
   const handleOpenReview = (batchId: string) => {
-    const itemsForReview = batches[batchId].map((item: any) => ({
+    const itemsForReview = batches[batchId].map((item: OrderItem) => ({
       ...item, 
       id: (item.id || item.Product_ID || item.rowId || '').toString(),
       name: item.name || item.Product_Name || 'ไม่มีชื่อสินค้า',
@@ -324,7 +314,9 @@ const handleFinalConfirm = async () => {
         }
 
         return {
-          id: item.id || (item as any).ID || (item as any).rowNumber, 
+          id: item.id || item.ID || item.rowNumber, 
+          rowUid: item.rowUid || '',
+          productId: item.productId || item.Product_ID || '',
           status: finalStatus, 
           orderCarton: item.orderCarton,
           cartonUnit: item.cartonUnit,
@@ -380,7 +372,7 @@ const handleFinalConfirm = async () => {
     }
   };
 
-  const addItem = (product: any) => {
+  const addItem = (product: OrderItem) => {
   // เช็คว่าไอดีสินค้าตัวนี้ มีอยู่ในรายการ (items) หรือยัง
   const productId = product.Product_ID || product.id;
   const isDuplicate = items.some(item => item.id === productId);
@@ -608,14 +600,14 @@ const submitAddMore = async () => {
   const currentBatches = filteredBatchKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   if (loading && Object.keys(batches).length === 0) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+    <div className="app-shell flex flex-col items-center justify-center">
       <div className="w-16 h-16 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
       <p className="text-slate-400 font-bold tracking-widest animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="app-shell font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
       {/* --- การแจ้งเตือน --- */}
       <div className="fixed top-6 right-6 z-100 flex flex-col gap-3">
         {notifications.map(noti => (
@@ -630,18 +622,18 @@ const submitAddMore = async () => {
         ))}
       </div>
 
-      <div className="max-w-6xl mx-auto p-4 md:p-10">
+      <div className="app-container">
         {/* --- ส่วนหัวข้อ --- */}
-        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between bg-white p-8 md:p-12 rounded-[40px] shadow-sm relative overflow-hidden text-slate-900 border-b-8 border-emerald-600">
+        <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-emerald-600">
           <div className="relative z-10">
-            <span className="text-[12px] font-black text-emerald-600 uppercase tracking-[0.4em] mb-3 block">
+            <span className="page-kicker text-emerald-600 mb-3 block">
               Purchase Order System
             </span>
-            <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-none">
+            <h1 className="page-title font-display">
               ระบบ <span className="text-emerald-600 not-italic">สั่งซื้อสินค้า</span>
             </h1>
-            <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mt-6 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <p className="page-subtitle mt-4 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
               จัดการรายการขอซื้อและบันทึกประวัติการสั่งซื้อ
             </p>
           </div>
@@ -660,127 +652,21 @@ const submitAddMore = async () => {
                 
                 setIsModalOpen(true);
               }}
-              className="bg-slate-900 text-white hover:bg-emerald-600 px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
+              className="primary-action bg-slate-900 text-white hover:bg-emerald-600 shadow-lg shadow-slate-900/10"
             >
               <span className="text-xl">+</span> สร้างบิลใหม่
             </button>
             <button 
               onClick={() => fetchPendingOrders()} 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-3"
+              className="primary-action bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/15"
             >
               <span className="text-xl">🔄</span> รีเฟรช
             </button>
           </div>
         </div>
 
-        {/* --- รายการตรวจสอบสินค้าที่ไม่ครบ (รูปแบบพรีเมียม) --- */}
-        {discrepancyItems.length > 0 && (
-          <div className="mb-10">
-            <div className="flex items-center justify-between mb-4 px-2">
-              <h2 className="text-[12px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-                <span className="w-2 h-5 bg-red-500 rounded-full"></span>
-                แจ้งเตือนรายการที่มีปัญหา ({
-                  Array.from(new Set(
-                    discrepancyItems
-                      .filter(item => 
-                        // ✅ แก้ไข: ไม่ต้องเช็ค ORDERED แล้ว เพื่อให้รายการยังอยู่แม้จะกดบันทึกไปแล้ว
-                        // จะหายไปก็ต่อเมื่อพิมพ์คำว่า "ตัดบิลจบ" ในโน้ตสต็อกเท่านั้น
-                        !item.Note_Stock?.includes('ตัดบิลจบ')
-                      )
-                      .map(item => item.productID || item.productId)
-                  )).length
-                })
-              </h2>
-              <span className="text-[9px] font-bold text-slate-400 italic px-2">เลื่อนดูรายการ ↔</span>
-            </div>
-            
-            <div className="flex gap-4 overflow-x-auto pb-6 custom-scrollbar-h snap-x">
-              {discrepancyItems
-                .filter(item => 
-                  // ✅ แก้ไขเงื่อนไขเดียวกัน: ให้รายการค้างไว้จนกว่าจะพิมพ์ "ตัดบิลจบ"
-                  !item.Note_Stock?.includes('ตัดบิลจบ')
-                )
-                // กรองรายการซ้ำตาม ID
-                .filter((item, index, self) => 
-                  index === self.findIndex((t) => (t.productID || t.productId) === (item.productID || item.productId))
-                )
-                .map((item, idx) => {
-                  const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
-                  const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
+        <IssueTracking items={rawData} />
 
-                  return (
-                    <div 
-                      key={`issue-${item.productID || item.productId || idx}`} 
-                      className="shrink-0 w-80 snap-start bg-white p-6 rounded-[35px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all"
-                    >
-                      {/* ส่วนแสดงผลด้านในเหมือนเดิมของพี่ได้เลยครับ */}
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-3 py-1 rounded-lg uppercase italic">
-                          ID: {item.productID || item.productId}
-                        </span>
-                        <div className="flex flex-col items-end gap-1">
-                          {item.status === 'ORDERED' && (
-                            <span className="bg-blue-100 text-blue-600 text-[8px] font-black px-2 py-1 rounded-lg uppercase">
-                              บันทึกแล้ว (รอเคลียร์)
-                            </span>
-                          )}
-                          {item.supplier && (
-                            <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate max-w-30">
-                              {item.supplier}
-                            </span>
-                          )}
-                          {diffCarton !== 0 && (
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
-                              {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
-                            </span>
-                          )}
-                          {diffInner !== 0 && (
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
-                              {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <h4 className="font-black text-slate-800 text-[14px] uppercase italic truncate mb-4">
-                        {item.productName || item.Product_Name || item.name}
-                      </h4>
-                      
-                      <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-2">
-                        <div className="flex justify-between text-[11px] font-bold">
-                          <span className="text-slate-400 font-medium">ค่าอ้างอิง (สั่ง/บรรจุ):</span>
-                          <div className="flex flex-col items-end">
-                            <span className="text-slate-900">{item.orderCarton} {item.cartonUnit}</span>
-                            <span className="text-slate-500 text-[10px]">บรรจุ {item.qtyPerCarton} {item.innerUnit}</span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
-                          <span className="text-slate-400 font-medium">ตรวจรับจริง:</span>
-                          <div className="flex flex-col items-end">
-                              <span className="text-red-600 italic font-black">{item.recvCarton} {item.cartonUnit}</span>
-                              <span className="text-red-600 italic font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* แสดง Note_Stock เพื่อดูความเคลื่อนไหว */}
-                      {item.Note_Stock && (
-                        <div className="mb-3 p-2 bg-amber-50 rounded-lg border border-amber-100 text-[10px] text-amber-700">
-                          <span className="font-black">หมายเหตุสต็อก:</span> {item.Note_Stock}
-                        </div>
-                      )}
-
-                      {item.Recv_Date && (
-                        <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 font-black uppercase italic">
-                          อัปเดต: {item.Recv_Date}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
 
         {/* --- แถบค้นหา --- */}
         <div className="mb-8 flex flex-col md:flex-row gap-4">
@@ -789,13 +675,13 @@ const submitAddMore = async () => {
             <input 
               type="text" 
               placeholder="ค้นหารรอบสั่งซื้อ หรือชื่อสินค้า..." 
-              className="w-full bg-white border border-slate-200 p-6 pl-16 rounded-3xl font-bold outline-none focus:ring-4 ring-yellow-500/10 shadow-sm transition-all text-lg placeholder:text-slate-300"
+              className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm || ''}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex items-center justify-center gap-4 min-w-50">
-            <div className="text-3xl">📦</div>
+          <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-50">
+            <div className="text-2xl">📦</div>
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">บิลที่กำลังดำเนินการ</p>
               <p className="text-2xl font-black text-emerald-600 leading-none">{filteredBatchKeys.length}</p>
@@ -830,7 +716,7 @@ const submitAddMore = async () => {
                 // 🔥 1. แก้ไข className ที่นี่ เพื่อให้การ์ดมีมุมมนและเงา (Shadow) ดูนุ่มนวลขึ้น
                 <div 
                   key={`batch-card-${batchId}`}
-                  className="bg-white border border-slate-100 rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mb-6 transition-all duration-300 hover:border-emerald-100 hover:shadow-[0_20px_40px_rgba(16,185,129,0.08)]"
+                  className="app-card overflow-hidden mb-5 transition-all duration-300 hover:border-emerald-200"
                 >
                   {/* ส่วนหัวของบิล (Header) */}
                   <div 
@@ -1400,3 +1286,5 @@ const submitAddMore = async () => {
     </div>
   );
 }
+
+const isAbortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';

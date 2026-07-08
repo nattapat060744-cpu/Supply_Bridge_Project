@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import IssueTracking from '@/components/IssueTracking';
 
 interface StockItem {
   rowId: number;
@@ -23,6 +24,32 @@ interface StockItem {
   Created_At?: string;
   Created_At_P?: string;
   invoiceNo?: string;
+}
+
+type StockApiItem = StockItem & {
+  id?: string | number;
+  ID?: string | number;
+  rowNumber?: string | number;
+};
+
+type ImportRow = Record<string, string | number | boolean | null | undefined>;
+
+interface ProductGroup {
+  productInfo: StockItem;
+  batches: StockItem[];
+  totalOrder: number;
+  totalRecv: number;
+}
+
+interface StockUpdateData {
+  rowId: number;
+  productID: string;
+  invoiceNo: string;
+  recvCarton?: number;
+  Recv_Qty?: number;
+  Note_Stock?: string;
+  Recv_Date?: string;
+  status?: string;
 }
 
 export default function StockPage() {
@@ -101,7 +128,7 @@ export default function StockPage() {
       try {
         const savedUser = JSON.parse(savedUserStr);
         // 2. เช็คสิทธิ์แผนก (คงเดิม)
-        if (!savedUser.name || (savedUser.department !== 'STOCK' && savedUser.department !== 'ADMIN')) {
+        if (!savedUser.name || (savedUser.department !== 'STOCK' && savedUser.department !== 'ADMIN' && savedUser.department !== 'STOCK_SORTING_MANAGER')) {
           alert(`ไม่มีสิทธิ์เข้าหน้านี้ (แผนกของพี่คือ: ${savedUser.department})`);
           router.push('/');
           return;
@@ -123,8 +150,9 @@ export default function StockPage() {
       if (!res.ok) throw new Error('Network response was not ok');
       const data = await res.json();
       
-      data.forEach((item: any) => {
-        const itemId = item.id || item.ID || item.rowNumber;
+      data.forEach((item: StockApiItem) => {
+        const itemId = String(item.id || item.ID || item.rowNumber || '');
+        if (!itemId) return;
         const currentItemStr = JSON.stringify(item);
         if (previousDataRef.current[itemId] && previousDataRef.current[itemId] !== currentItemStr) {
           console.log(`รายการ ${itemId} อัปเดตข้อมูล`);
@@ -371,7 +399,7 @@ const exportToExcel = () => {
   const [supplierSearch, setSupplierSearch] = useState('');
 
   // State สำหรับจัดการ Import
-  const [importData, setImportData] = useState<any[]>([]); // เก็บข้อมูลที่อ่านจาก Excel
+  const [importData, setImportData] = useState<ImportRow[]>([]); // เก็บข้อมูลที่อ่านจาก Excel
   const [showImportModal, setShowImportModal] = useState(false); // เปิดหน้าต่างเช็คข้อมูลก่อนเซฟ
 
   // Ref สำหรับ Input ไฟล์
@@ -391,9 +419,9 @@ const exportToExcel = () => {
         
         // หัวตารางอยู่ที่แถวที่ 5 ใน Excel (index คือ 4) 
         // หรือถ้าพี่นับจากไฟล์ CSV ที่ส่งมา แถวว่างมันมี 4 แถว แถวที่ 5 คือหัวตาราง
-        const parsedData = XLSX.utils.sheet_to_json(sheet, { range: 4 });
+        const parsedData = XLSX.utils.sheet_to_json<ImportRow>(sheet, { range: 4 });
 
-        const results = parsedData.filter((row: any) => {
+        const results = parsedData.filter((row: ImportRow) => {
           // เช็คชื่อคอลัมน์ให้ตรงกับไฟล์ Excel ของพี่ชายเป๊ะๆ
           const hasBox = row['รับจริง (กล่อง)'] !== undefined && row['รับจริง (กล่อง)'] !== '';
           const hasPiece = row['รับจริง (ชิ้น)'] !== undefined && row['รับจริง (ชิ้น)'] !== '';
@@ -436,7 +464,7 @@ const exportToExcel = () => {
       });
 
       // จัดกลุ่มสินค้า (Grouping)
-      const groups: { [key: string]: any } = {};
+      const groups: { [key: string]: ProductGroup } = {};
       filtered.forEach(item => {
         const id = item.productID;
         if (!groups[id]) {
@@ -453,7 +481,7 @@ const exportToExcel = () => {
       });
 
     // เรียงลำดับชื่อสินค้า
-    const sortedProducts = Object.values(groups).sort((a: any, b: any) => 
+    const sortedProducts = Object.values(groups).sort((a: ProductGroup, b: ProductGroup) => 
       a.productInfo.productName.localeCompare(b.productInfo.productName)
     );
 
@@ -486,19 +514,6 @@ const exportToExcel = () => {
       return matchSearch && matchSupplier;
     });
   }, [items, searchTerm, selectedSupplier]);
-
-  const discrepancyItems = useMemo(() => {
-    return items.filter(i => {
-      const ordered = Number(i.orderCarton || 0);
-      const received = Number(i.recvCarton || 0);
-      const expectedExtra = Number(i.qtyPerCarton || 0); 
-      const actualExtra = Number(i.Recv_Qty || 0);
-      const isCompleted = i.status === 'COMPLETED';
-      const isMismatch = (received !== ordered) || (actualExtra !== expectedExtra);
-      const hasAction = received > 0 || actualExtra > 0;
-      return isCompleted && isMismatch && hasAction;
-    });
-  }, [items]);
 
   const toggleBatch = (id: string) => {
     setExpandedBatches(prev => ({ ...prev, [id]: !prev[id] }));
@@ -557,7 +572,7 @@ const handleBatchSubmit = async () => {
       if (!updatingItem) return;
       setIsSubmitting(true);
       try {
-        const updateData: any = {
+        const updateData: StockUpdateData = {
           rowId: updatingItem.rowId,
           productID: updatingItem.productID,
           // *** เพิ่มบรรทัดนี้: เพื่อส่งเลขที่บิลที่มีอยู่กลับไปด้วย ***
@@ -724,7 +739,7 @@ const handleConfirmImport = async () => {
     setIsSubmitting(true);
     let successCount = 0;
     let failCount = 0;
-    let skipMessages: string[] = [];
+    const skipMessages: string[] = [];
 
     try {
       for (const row of importData) {
@@ -921,31 +936,31 @@ const handleConfirmImport = async () => {
   };
 
   return (
-      <div className="max-w-6xl mx-auto p-4 md:p-10">
+      <div className="app-container">
         {/* ส่วนหัวข้อหลัก */}
-        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between bg-white p-8 md:p-12 rounded-[40px] shadow-sm relative overflow-hidden text-slate-900 border-b-8 border-yellow-600">
+        <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-yellow-600">
             <div className="relative z-10">
-              <span className="text-[12px] font-black text-yellow-600 uppercase tracking-[0.4em] mb-3 block">
+              <span className="page-kicker text-yellow-700 mb-3 block">
                 Inventory Control System
               </span>
-              <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-none">
+              <h1 className="page-title font-display">
                 รายการ <span className="text-yellow-600 not-italic">สต็อกสินค้า</span>
               </h1>
-              <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mt-6 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+              <p className="page-subtitle mt-4 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-green-500"></span>
                 จัดการรายการสั่งซื้อและตรวจสอบสินค้าในระบบ
               </p>
             </div>
             <button 
               onClick={fetchPendingOrders}
-              className="mt-8 md:mt-0 bg-yellow-600 hover:bg-slate-900 text-white px-10 py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center gap-3 shadow-lg"
+              className="primary-action bg-yellow-600 text-white shadow-lg shadow-yellow-600/15 hover:bg-slate-900 md:self-end"
             >
               <span className="text-2xl">🔄</span> รีเฟรชข้อมูล
             </button>
         </div>
 
 {/* Phase 2: Action Bar (Modern & Functional) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10 bg-white p-4 rounded-[40px] border border-slate-200/60 shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-8 app-card p-4 md:p-5 transition-all">
         
         {/* 1. โซนค้นหา (ฝั่งซ้าย) */}
         <div className="lg:col-span-5 flex flex-col gap-3">
@@ -955,20 +970,20 @@ const handleConfirmImport = async () => {
           </div>
           
           <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-              <span className="text-2xl grayscale group-focus-within:grayscale-0 transition-all duration-300">🔍</span>
+            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+              <span className="text-xl text-slate-400">🔍</span>
             </div>
             <input 
               type="text"
               placeholder="รหัสสินค้า, ชื่อสินค้า หรือ เลขบิล..."
-              className="w-full pl-16 pr-14 py-5 rounded-[26px] border-2 border-slate-100 bg-slate-50/50 font-bold text-lg focus:border-yellow-400 focus:bg-white focus:ring-4 focus:ring-yellow-400/10 outline-none transition-all shadow-sm placeholder:text-slate-300 text-slate-700"
+              className="control-field w-full pl-14 pr-12 py-4 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
               <button 
                 onClick={() => setSearchTerm('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 hover:shadow-md rounded-xl transition-all border border-slate-100"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-lg transition-all border border-slate-100"
               >
                 ✕
               </button>
@@ -983,7 +998,7 @@ const handleConfirmImport = async () => {
             <select
               value={selectedSupplier}
               onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="w-full h-17 bg-slate-50/50 px-6 rounded-[26px] font-black border-2 border-slate-100 focus:border-yellow-400 focus:bg-white outline-none transition-all text-slate-600 appearance-none cursor-pointer hover:border-slate-200"
+              className="control-field w-full h-14 px-5 rounded-xl font-black text-slate-600 appearance-none cursor-pointer"
             >
               {suppliers.map((s) => (
                 <option key={s} value={s}>
@@ -1011,7 +1026,7 @@ const handleConfirmImport = async () => {
             {/* ปุ่มหลัก: ลงทะเบียนรับของ */}
             <button 
               onClick={() => setIsBulkModalOpen(true)}
-              className="group relative flex items-center justify-center gap-3 bg-slate-900 text-yellow-400 py-4.5 rounded-3xl font-black text-xs hover:bg-yellow-400 hover:text-slate-900 transition-all shadow-xl shadow-slate-200 uppercase tracking-widest active:scale-95 overflow-hidden"
+              className="primary-action w-full bg-slate-900 text-yellow-300 hover:bg-yellow-500 hover:text-slate-950"
             >
               <span className="text-xl group-hover:scale-125 transition-transform">📦</span>
               <span>ลงทะเบียนรับของหลายรายการ</span>
@@ -1022,7 +1037,7 @@ const handleConfirmImport = async () => {
             <div className="grid grid-cols-2 gap-2">
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-white border-2 border-slate-100 text-slate-600 py-3 rounded-[20px] font-bold text-[10px] hover:border-blue-400 hover:text-blue-600 transition-all uppercase tracking-tighter active:scale-95"
+                className="rounded-lg border border-slate-200 bg-white py-3 text-[11px] font-bold uppercase text-slate-600 transition-all hover:border-blue-400 hover:text-blue-600 active:scale-95"
               >
                 <span>📥</span>
                 <span>Import</span>
@@ -1030,7 +1045,7 @@ const handleConfirmImport = async () => {
 
               <button 
                 onClick={() => setShowExportOptions(true)}
-                className="flex items-center justify-center gap-2 bg-white border-2 border-slate-100 text-slate-600 py-3 rounded-[20px] font-bold text-[10px] hover:border-emerald-500 hover:text-emerald-600 transition-all uppercase tracking-tighter active:scale-95"
+                className="rounded-lg border border-slate-200 bg-white py-3 text-[11px] font-bold uppercase text-slate-600 transition-all hover:border-emerald-500 hover:text-emerald-600 active:scale-95"
               >
                 <span>📊</span>
                 <span>Export</span>
@@ -1041,89 +1056,13 @@ const handleConfirmImport = async () => {
 
       </div>
             
-      {/* ส่วน Discrepancy Items (คงเดิมแต่ปรับ Padding ให้รับกับส่วนอื่น) */}
-      {discrepancyItems.length > 0 && (
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h2 className="text-[12px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-              <span className="w-2 h-5 bg-red-500 rounded-full"></span>
-              {/* 🔥 ปรับ Filter ตรงการนับจำนวนเลข ID */}
-              แจ้งเตือนรายการที่มีปัญหา ({Array.from(new Set(discrepancyItems.filter(item => !item.Note_Stock?.includes('ตัดบิลจบ')).map(item => item.productID))).length})
-            </h2>
-          </div>
-          
-          <div className="flex gap-4 overflow-x-auto pb-6 custom-scrollbar-h snap-x">
-            {discrepancyItems
-              // 🔥 [จุดที่เพิ่ม] กรองรายการที่ตัดบิลแล้วออกไป (ถ้ามีคำว่า "ตัดบิลจบ" ใน Note จะไม่โชว์ที่นี่)
-              .filter(item => !item.Note_Stock?.includes('ตัดบิลจบ'))
-              .filter((item, index, self) => index === self.findIndex((t) => (t.productID === item.productID)))
-              .map((item, idx) => {
-                const diffCarton = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
-                const diffInner = Number(item.Recv_Qty || 0) - Number(item.qtyPerCarton || 0);
+      <IssueTracking
+        items={items}
+        canEdit
+        onEdit={setUpdatingItem}
+        onForceComplete={handleForceComplete}
+      />
 
-                return (
-                  <div key={`issue-${item.productID || idx}`} className="shrink-0 w-80 snap-start bg-white p-6 rounded-[35px] border-2 border-red-50 shadow-md hover:border-red-200 transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-3 py-1 rounded-lg uppercase italic">ID: {item.productID}</span>
-                      <div className="flex flex-col items-end gap-1">
-                        {item.supplier && (
-                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase truncate">
-                            {item.supplier}
-                          </span>
-                        )}
-                        {diffCarton !== 0 && (
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffCarton < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-500'}`}>
-                            {diffCarton < 0 ? `ลังขาด ${Math.abs(diffCarton)}` : `ลังเกิน ${diffCarton}`} {item.cartonUnit}
-                          </span>
-                        )}
-                        {diffInner !== 0 && (
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${diffInner < 0 ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
-                            {diffInner < 0 ? `เศษขาด ${Math.abs(diffInner)}` : `เศษเกิน ${diffInner}`} {item.innerUnit}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <h4 className="font-black text-slate-800 text-[14px] uppercase italic truncate mb-4">{item.productName}</h4>
-                    
-                    <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-2">
-                      <div className="flex justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">ค่าอ้างอิง (สั่ง/บรรจุ):</span>
-                        <div className="flex flex-col items-end">
-                          <span className="text-slate-900">{item.orderCarton} {item.cartonUnit}</span>
-                          <span className="text-slate-900">บรรจุ {item.qtyPerCarton} {item.innerUnit}</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-between text-[11px] font-bold border-t border-slate-200 pt-2">
-                        <span className="text-slate-400">ตรวจรับจริง:</span>
-                        <div className="flex flex-col items-end">
-                            <span className="text-red-600 italic font-black">{item.recvCarton} {item.cartonUnit}</span>
-                            <span className="text-red-600 italic font-black">บรรจุ {item.Recv_Qty} {item.innerUnit}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ปรับปรุงส่วนปุ่มด้านล่าง */}
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => setUpdatingItem(item)} 
-                        className="flex-2 bg-slate-950 text-yellow-400 text-[11px] font-black py-4 rounded-2xl hover:bg-yellow-400 hover:text-slate-950 transition-all shadow-lg uppercase"
-                      >
-                        แก้ไข / รับเพิ่ม
-                      </button>
-                      <button 
-                        onClick={() => handleForceComplete(item)} 
-                        className="flex-1 bg-red-50 text-red-500 text-[11px] font-black py-4 rounded-2xl hover:bg-red-500 hover:text-white transition-all border border-red-100 uppercase"
-                      >
-                        ตัดบิล
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
 
 {/* Table Section: ปรับโฉมใหม่เป็น Modern Floating Card Style */}
       <div className="w-full overflow-x-auto pb-10">

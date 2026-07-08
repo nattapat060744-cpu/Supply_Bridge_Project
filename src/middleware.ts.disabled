@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth';
+
+// แมป path ของ API กับแผนกที่อนุญาตให้เข้าถึง (ADMIN เข้าได้ทุกที่เสมอ)
+// '*' หมายถึงอนุญาตให้ทุกแผนกที่ login แล้วเข้าได้ (เช่น history เป็น read-only ดูร่วมกันได้)
+const ROUTE_DEPARTMENTS: { prefix: string; allow: string[] }[] = [
+  { prefix: '/api/order', allow: ['SORTING', 'SORTING_VIEWER', 'STOCK_SORTING_MANAGER'] },
+  { prefix: '/api/purchase', allow: ['PURCHASE', 'SORTING', 'STOCK_SORTING_MANAGER'] }, // sorting อ่าน pending order ผ่าน purchase GET ในบางหน้า
+  { prefix: '/api/stock', allow: ['STOCK', 'STOCK_SORTING_MANAGER'] },
+  { prefix: '/api/history', allow: ['SORTING', 'PURCHASE', 'STOCK', 'STOCK_SORTING_MANAGER'] },
+  { prefix: '/api/archive', allow: ['ADMIN'] },
+];
+
+const PUBLIC_PATHS = ['/api/auth/login', '/api/auth/logout', '/api/register'];
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  if (!pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const session = await verifySessionToken(token);
+
+  if (!session) {
+    return NextResponse.json(
+      { success: false, error: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนใช้งานครับ' },
+      { status: 401 }
+    );
+  }
+
+  const rule = ROUTE_DEPARTMENTS.find((r) => pathname.startsWith(r.prefix));
+  if (rule && session.department !== 'ADMIN' && !rule.allow.includes('*') && !rule.allow.includes(session.department)) {
+    return NextResponse.json(
+      { success: false, error: 'FORBIDDEN', message: 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลส่วนนี้ครับ' },
+      { status: 403 }
+    );
+  }
+
+  // แนบข้อมูล user ไปให้ route handler ใช้ audit/log ได้ (เช่น "ใครเป็นคนกดรับสินค้า")
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-session-user', session.username);
+  requestHeaders.set('x-session-department', session.department);
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
+export const config = {
+  matcher: '/api/:path*',
+};

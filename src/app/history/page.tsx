@@ -1,6 +1,5 @@
 'use client';
-import Link from 'next/link';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 interface HistoryItem {
   rowId: number;
@@ -25,6 +24,21 @@ interface HistoryItem {
   noteStock?: string;
 }
 
+interface ArchiveSummary {
+  eligibleCount: number;
+  archivedCount: number;
+  totalRows: number;
+  cutoffDays: number;
+  archiveSheets: Record<string, number>;
+  candidates: Array<{
+    rowNumber: number;
+    archiveSheet: string;
+    recvDate: string;
+    productId: string;
+    productName: string;
+  }>;
+}
+
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,8 +49,13 @@ export default function HistoryPage() {
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20); // ✅ เปลี่ยนเป็น State ให้เลือกได้
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [archiveDays, setArchiveDays] = useState(180);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveSummary, setArchiveSummary] = useState<ArchiveSummary | null>(null);
+  const [archiveMessage, setArchiveMessage] = useState('');
 
-  const fetchHistory = () => {
+  const fetchHistory = useCallback(() => {
     setLoading(true);
     setItems([]);
     setCurrentPage(1);
@@ -45,15 +64,15 @@ export default function HistoryPage() {
       .then(res => res.json())
       .then(data => {
         const rawData = Array.isArray(data) ? data : [];
-        const extract = (obj: any, target: string) => {
+        const extract = (obj: Record<string, unknown>, target: string) => {
           const keys = Object.keys(obj);
           const cleanTarget = target.replace(/_/g, '').toLowerCase();
           const foundKey = keys.find(k => k.replace(/_/g, '').toLowerCase() === cleanTarget);
           return foundKey ? String(obj[foundKey]) : '';
         };
 
-        const formatted = rawData.map((item, index) => ({
-          rowId: item.rowNumber || item.rowId || index,
+        const formatted = rawData.map((item: Record<string, unknown>, index) => ({
+          rowId: Number(item.rowNumber || item.rowId || index),
           status: extract(item, 'Status').trim().toUpperCase() || 'PENDING',
           productName: extract(item, 'Product_Name') || 'ไม่ระบุชื่อ',
           groupId: extract(item, 'Group_ID') || extract(item, 'Group_ID') || 'ทั่วไป',
@@ -82,9 +101,72 @@ export default function HistoryPage() {
         console.error(err);
         setLoading(false);
       });
-  };
+  }, []);
 
-  useEffect(() => { fetchHistory(); }, []);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(fetchHistory, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      if (!savedUser) return;
+      const user = JSON.parse(savedUser);
+      setIsAdmin(user?.department === 'ADMIN');
+    } catch {
+      setIsAdmin(false);
+    }
+  }, []);
+
+  const previewArchive = useCallback(async () => {
+    setArchiveLoading(true);
+    setArchiveMessage('');
+    try {
+      const res = await fetch(`/api/archive?days=${archiveDays}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setArchiveMessage(data.message || 'ตรวจสอบรายการสำหรับเก็บเข้าคลังไม่สำเร็จ');
+        return;
+      }
+      setArchiveSummary(data);
+      setArchiveMessage(`ตรวจพบ ${data.eligibleCount || 0} รายการที่พร้อมย้ายเข้าคลัง`);
+    } catch (err) {
+      console.error(err);
+      setArchiveMessage('ตรวจสอบรายการสำหรับเก็บเข้าคลังไม่สำเร็จ');
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [archiveDays]);
+
+  const runArchive = useCallback(async () => {
+    if (!archiveSummary || archiveSummary.eligibleCount === 0) return;
+    const ok = confirm(`ยืนยันย้าย ${archiveSummary.eligibleCount} รายการที่จบแล้วและเก่ากว่า ${archiveDays} วันเข้าคลังใช่ไหม?\nระบบจะคัดลอกไปแท็บ Archive รายปี แล้วลบออกจาก Orders หลังคัดลอกสำเร็จ`);
+    if (!ok) return;
+
+    setArchiveLoading(true);
+    setArchiveMessage('');
+    try {
+      const res = await fetch('/api/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'run', days: archiveDays }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setArchiveMessage(data.message || 'ย้ายรายการเข้าคลังไม่สำเร็จ');
+        return;
+      }
+      setArchiveSummary(data);
+      setArchiveMessage(`ย้ายเข้าคลังสำเร็จ ${data.archivedCount || 0} รายการ`);
+      fetchHistory();
+    } catch (err) {
+      console.error(err);
+      setArchiveMessage('ย้ายรายการเข้าคลังไม่สำเร็จ');
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [archiveDays, archiveSummary, fetchHistory]);
 
   // ✅ ดึงรายชื่อ Supplier ทั้งหมดออกมาทำ Dropdown (ไม่ซ้ำกัน)
   const supplierList = useMemo(() => {
@@ -94,7 +176,7 @@ export default function HistoryPage() {
 
   // ✅ 1. กรองข้อมูล (Filter) และ เรียงลำดับ (Sort)
   const filteredAndSortedItems = useMemo(() => {
-    let result = items.filter(item => {
+    const result = items.filter(item => {
       const currentStatus = (item.status === 'REJECT' || item.status === 'REJECTED') ? 'REJECTED' : item.status;
       const matchesStatus = filterStatus === 'ALL' || currentStatus === filterStatus;
       const matchesSupplier = filterSupplier === 'ALL' || item.supplier === filterSupplier;
@@ -123,33 +205,39 @@ export default function HistoryPage() {
     return filteredAndSortedItems.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredAndSortedItems, currentPage, itemsPerPage]);
 
-  // รีเซ็ตหน้าเมื่อมีการเปลี่ยนการกรอง
-  useEffect(() => { setCurrentPage(1); }, [filterStatus, filterSupplier, searchTerm, itemsPerPage, sortOrder]);
-
  return (
-    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans text-slate-900">
-      <div className="max-w-412.5 mx-auto">
+    <div className="app-shell font-sans text-slate-900">
+      <div className="app-container">
         
         {/* แผงควบคุม Filter & Sort */}
-        <div className="bg-white p-6 rounded-4xl shadow-sm border border-slate-200 mb-8">
+        <div className="app-hero p-6 md:p-8 mb-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-black uppercase italic tracking-tighter">📜 History</h1>
-              <button onClick={fetchHistory} className="bg-slate-100 p-2 rounded-full hover:rotate-180 transition-all duration-500 shadow-inner">🔄</button>
+              <div>
+                <p className="page-kicker">Audit Trail</p>
+                <h1 className="page-title font-display">History</h1>
+              </div>
+              <button onClick={fetchHistory} className="primary-action bg-slate-950 text-white hover:bg-blue-700 shadow-lg shadow-slate-900/10">Refresh</button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 w-full lg:max-w-5xl">
               {/* ค้นหา */}
               <input 
                 type="text" placeholder="ค้นหาชื่อสินค้า/กลุ่ม/Supplier..." value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none focus:border-blue-600 transition-all"
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="control-field p-3 rounded-xl font-bold text-sm"
               />
 
               {/* เลือก Supplier */}
               <select 
-                value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer"
+                value={filterSupplier} onChange={(e) => {
+                  setFilterSupplier(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="control-field p-3 rounded-xl font-bold text-sm cursor-pointer"
               >
                 <option value="ALL">ทุก Supplier</option>
                 {supplierList.map(s => <option key={s} value={s}>{s}</option>)}
@@ -157,8 +245,11 @@ export default function HistoryPage() {
 
               {/* เรียงลำดับ */}
               <select 
-                value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer"
+                value={sortOrder} onChange={(e) => {
+                  setSortOrder(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="control-field p-3 rounded-xl font-bold text-sm cursor-pointer"
               >
                 <option value="NEWEST">ล่าสุด → เก่าสุด</option>
                 <option value="OLDEST">เก่าสุด → ล่าสุด</option>
@@ -167,9 +258,12 @@ export default function HistoryPage() {
               </select>
 
               {/* จำนวนต่อหน้า */}
-              <div className="flex items-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl gap-2">
+              <div className="flex items-center control-field p-3 rounded-xl gap-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase">Show:</span>
-                <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="bg-transparent font-black text-sm outline-none w-full">
+                <select value={itemsPerPage} onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }} className="bg-transparent font-black text-sm outline-none w-full">
                   <option value={20}>20 แถว</option>
                   <option value={50}>50 แถว</option>
                   <option value={100}>100 แถว</option>
@@ -179,13 +273,77 @@ export default function HistoryPage() {
             </div>
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="app-card mb-8 p-4 md:p-5">
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div>
+                <p className="page-kicker text-slate-500">จัดการพื้นที่ข้อมูล</p>
+                <h2 className="text-lg font-black text-slate-950">เก็บรายการที่จบแล้วเข้าคลัง</h2>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                  ตรวจสอบจำนวนก่อนเสมอ เมื่อกดย้ายจริง ระบบจะคัดลอกรายการเก่าไปแท็บคลังรายปี แล้วลบออกจาก Orders
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  value={archiveDays}
+                  onChange={(e) => setArchiveDays(Number(e.target.value))}
+                  className="control-field rounded-xl p-3 text-sm font-bold"
+                  disabled={archiveLoading}
+                >
+                  <option value={90}>เก่ากว่า 90 วัน</option>
+                  <option value={180}>เก่ากว่า 180 วัน</option>
+                  <option value={365}>เก่ากว่า 365 วัน</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={previewArchive}
+                  disabled={archiveLoading}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ตรวจสอบ
+                </button>
+                <button
+                  type="button"
+                  onClick={runArchive}
+                  disabled={archiveLoading || !archiveSummary || archiveSummary.eligibleCount === 0}
+                  className="rounded-xl bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  ย้ายเข้าคลัง
+                </button>
+              </div>
+            </div>
+
+            {(archiveMessage || archiveSummary) && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">
+                {archiveMessage && <p>{archiveMessage}</p>}
+                {archiveSummary && (
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    <div>แถวทั้งหมด: {archiveSummary.totalRows}</div>
+                    <div>พร้อมย้าย: {archiveSummary.eligibleCount}</div>
+                    <div>ย้ายแล้ว: {archiveSummary.archivedCount || 0}</div>
+                    {Object.entries(archiveSummary.archiveSheets || {}).map(([sheet, count]) => (
+                      <div key={sheet} className="md:col-span-3 text-slate-500">
+                        {sheet}: {count} รายการ
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         
         
         {/* แถบ Filter สถานะ */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
           {['ALL', 'PENDING', 'ORDERED', 'COMPLETED', 'REJECTED'].map(s => (
             <button
-              key={s} onClick={() => setFilterStatus(s)}
+              key={s} onClick={() => {
+                setFilterStatus(s);
+                setCurrentPage(1);
+              }}
               className={`px-6 py-2 rounded-full font-black text-[11px] tracking-widest transition-all ${
                 filterStatus === s ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'
               }`}
@@ -197,13 +355,13 @@ export default function HistoryPage() {
         </div>
 
         {/* ตารางข้อมูล */}
-        <div className="bg-white rounded-4xl shadow-xl border border-slate-100 overflow-hidden mb-6">
+        <div className="app-card overflow-hidden mb-6">
           <div className="overflow-x-auto">
             {loading ? (
-              <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.3em]">กำลังดึงข้อมูลล่าสุด... 🚀</div>
+              <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.18em]">กำลังดึงข้อมูลล่าสุด...</div>
             ) : (
               <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-[0.2em] border-b">
+                <thead className="bg-slate-50 text-slate-500 font-black uppercase text-[10px] tracking-[0.12em] border-b">
                   <tr>
                     <th className="p-6 whitespace-nowrap">ข้อมูลบิล</th>
                     <th className="p-6 w-1/3">รายการสินค้า/Supplier</th>
@@ -216,7 +374,7 @@ export default function HistoryPage() {
                 </thead>
                   <tbody className="divide-y divide-slate-50">
                     {paginatedItems.map((item, idx) => (
-                      <tr key={`${item.rowId}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                      <tr key={`${item.rowId}-${idx}`} className="hover:bg-slate-50/70 transition-colors">
                         {/* 1. ข้อมูลบิลและวันที่สั่ง */}
                         <td className="p-6 align-top">
                           <div className="font-black text-slate-900 mb-1">{item.createdAt}</div>
@@ -302,7 +460,7 @@ export default function HistoryPage() {
 
                         {/* 7. สถานะ */}
                         <td className="p-6 text-center align-top">
-                          <div className={`px-3 py-1 rounded-full text-[10px] font-black shadow-sm inline-block ${
+                          <div className={`px-3 py-1 rounded-md text-[10px] font-black shadow-sm inline-block ${
                             item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' :
                             item.status === 'ORDERED' ? 'bg-blue-600 text-white' : 
                             item.status === 'REJECTED' || item.status === 'REJECT' ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-900'

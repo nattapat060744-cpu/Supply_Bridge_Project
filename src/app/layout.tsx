@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Prompt, IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Navbar from '@/components/Navbar';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Display face — used for headings, brand wordmark, page titles
+const prompt = Prompt({
+  variable: "--font-display",
+  subsets: ["latin", "thai"],
+  weight: ["500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// Body face — used for everything else (UI text, tables, forms)
+const plexThai = IBM_Plex_Sans_Thai({
+  variable: "--font-body",
+  subsets: ["latin", "thai"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,9 +29,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${prompt.variable} ${plexThai.variable} antialiased`}>
         <Navbar /> 
-        <main>{children}</main>
+        <main className="min-h-screen">{children}</main>
       </body>
     </html>
   );
