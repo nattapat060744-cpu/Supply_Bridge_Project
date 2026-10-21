@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 google-credentials.json
 *.json.key
+# Local credential migration material and test artifacts
+.private/
+supabase/*-screenshot.png
+
+!.env.example

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPasswordRequestsSheet } from '@/lib/google-sheet';
+import { getPasswordRequestsSheet } from '@/lib/database';
 import { safeErrorResponse, toSafeString } from '@/lib/api-utils';
 import {
   normalizePasswordRequestStatus,

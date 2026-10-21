@@ -1,5 +1,4 @@
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
+import { StockDatabase, DatabaseRow, saveDatabaseRows } from '@/lib/database';
 import { NextResponse } from 'next/server';
 import { toSafeNonNegativeNumber, toSafeString, safeErrorResponse } from '@/lib/api-utils';
 import { getOrFetch, invalidateCache } from '@/lib/sheet-cache';
@@ -31,19 +30,9 @@ async function requirePurchaseWriteAccess(req: Request) {
 // --- ส่วน GET: เพิ่ม Note_Stock และแก้ไขให้ยอมปล่อย ORDERED ออกไปเช็คเวลาที่หน้าบ้าน ---
 export async function GET() {
   try {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) {
-      throw new Error("Missing Environment Variables");
-    }
-
-    // ✅ cache สั้นๆ 4 วินาที กัน user หลายคน/หลายแท็บที่ poll ทุก 30 วิ ยิง Sheets API ซ้ำพร้อมกัน
+// ✅ cache สั้นๆ 4 วินาที กัน user หลายคน/หลายแท็บที่ poll ทุก 30 วิ ยิง Sheets API ซ้ำพร้อมกัน
     const allItems = await getOrFetch('purchase:list', async () => {
-      const auth = new JWT({
-        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
-
-      const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
+    const doc = new StockDatabase();
       await doc.loadInfo();
       const sheet = doc.sheetsByIndex[0]; 
       const rows = await sheet.getRows();
@@ -75,7 +64,7 @@ export async function GET() {
         return false;
       })
       .map(r => ({
-        id: r.rowNumber.toString(),
+        id: r.rowNumber.toString(), revision: r.revision,
         rowUid: r.get('Row_UID') || '', // ✅ ID ถาวรที่ไม่เลื่อนตามตำแหน่งแถว (ใช้แทน rowNumber เมื่อมี)
         batchId: r.get('Group_ID') || '',
         batchName: r.get('Group_Name') || 'ไม่มีชื่อบิล',
@@ -120,23 +109,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'รายการสินค้า (items) ต้องไม่ว่าง' }, { status: 400 });
     }
 
-    const auth = new JWT({
-      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
+  const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
 
     const groupId = incomingGroupId || `ID-${Date.now()}`;
     
-    for (const item of items) {
+    const newRows = items.map((item:Record<string,unknown>) => {
       const orderCarton = toSafeNonNegativeNumber(item.orderCarton, 0);
       const qtyPerCarton = toSafeNonNegativeNumber(item.qtyPerCarton, 0);
 
-      await sheet.addRow({
+      return {
         'Group_ID': groupId,
         'Row_UID': crypto.randomUUID(), // ✅ ID ที่ไม่เปลี่ยนตามตำแหน่งแถว (ต่างจาก rowNumber ที่เลื่อนได้ถ้ามีการลบแถวอื่น)
         'Group_Name': toSafeString(groupName || batchName || 'ไม่ได้ระบุชื่อบิล'),
@@ -148,7 +131,7 @@ export async function POST(req: Request) {
         'Stock_Qty': toSafeNonNegativeNumber(item.warehouseQty ?? item.Stock_Qty, 0),
         'Note_Request': toSafeString(item.note || item.Note_Request || '-'),
         'Note_Stock': toSafeString(item.Note_Stock || ''), // ✅ เพิ่มการบันทึก Note_Stock
-        'Created_At': toSafeString(Created_At || new Date().toLocaleString('th-TH')),
+        'Created_At': toSafeString(Created_At || new Date().toLocaleString('th-TH', {timeZone:'Asia/Bangkok'})),
         'Created_At_P': '', 
         'Order_Carton': orderCarton,
         'Carton_Unit': toSafeString(item.cartonUnit || 'ลัง'),
@@ -156,8 +139,9 @@ export async function POST(req: Request) {
         'Inner_Unit': toSafeString(item.innerUnit || 'ชิ้น'),
         'Note_Purchase': toSafeString(item.notePur || item.notePurchase || ''),
         'Purchase_Qty': orderCarton * qtyPerCarton
-      });
-    }
+      };
+    });
+    await sheet.addRows(newRows);
 
     invalidateCache('purchase:list');
     invalidateCache('stock:list');
@@ -181,24 +165,20 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: 'รายการสินค้า (items) ต้องไม่ว่าง' }, { status: 400 });
     }
 
-    const auth = new JWT({
-      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
+  const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
     const rows = await sheet.getRows();
 
     const notFound: (string | number)[] = [];
+    const updates: DatabaseRow[] = [];
 
     for (const item of items) {
       // ✅ ถ้า frontend มี rowUid (แถวที่สร้างหลังอัปเดตนี้) ให้หาด้วย Row_UID ก่อน เพราะไม่เลื่อนตามตำแหน่งแถว
       // ถ้าไม่มี (ข้อมูลเก่า) fallback ไปหาด้วย rowNumber เหมือนเดิม
-      const row = (item.rowUid && rows.find(r => r.get('Row_UID') === item.rowUid))
-        || rows.find(r => r.rowNumber === Number(item.id));
+      const row = item.rowUid ? rows.find(r => r.id === item.rowUid) : rows.find(r => r.rowNumber === Number(item.id));
       if (row) {
+        row.expectRevision(item.revision);
         // 🛡️ ถ้า frontend ส่ง productId มาด้วย เช็คว่าตรงกับแถวที่เจอจริงไหม
         // กันบัค rowNumber เลื่อนเพราะมีคนลบ/เพิ่มแถวอื่นไปก่อนหน้า (ข้อมูล cache เก่าฝั่ง client)
         if (item.productId && row.get('Product_ID') !== item.productId) {
@@ -216,31 +196,22 @@ export async function PATCH(req: Request) {
         row.set('Inner_Unit', toSafeString(item.innerUnit || ''));
         row.set('Note_Purchase', toSafeString(item.purchaseNote || ''));
         row.set('Purchase_Qty', orderCarton * qtyPerCarton);
-        row.set('Note_Request', toSafeString(item.noteRequest || ''));
-        row.set('Note_Stock', toSafeString(item.Note_Stock || '')); // ✅ เพิ่มการอัปเดต Note_Stock
+        if(item.noteRequest !== undefined) row.set('Note_Request', toSafeString(item.noteRequest));
+        if(item.Note_Stock !== undefined) row.set('Note_Stock', toSafeString(item.Note_Stock)); // ✅ เพิ่มการอัปเดต Note_Stock
         
         if (item.Created_At_P) {
           row.set('Created_At_P', toSafeString(item.Created_At_P));
         }
         
-        await row.save();
+        updates.push(row);
       } else {
         notFound.push(item.id);
       }
     }
 
-    if (notFound.length > 0) {
-      // แจ้งกลับให้รู้ว่ามีบางแถวไม่เจอ (เช่นถูกลบ/rowNumber เปลี่ยนไปแล้ว) แทนที่จะเงียบ
-      invalidateCache('purchase:list'); // บางแถวอัปเดตสำเร็จแล้ว ต้อง invalidate ด้วย
-      invalidateCache('stock:list');
-      invalidateCache('history:list');
-      return NextResponse.json({
-        success: true,
-        partial: true,
-        message: `บันทึกสำเร็จบางส่วน แถวที่ไม่พบ: ${notFound.join(', ')} (อาจถูกลบหรือข้อมูลเปลี่ยนไปแล้ว กรุณารีเฟรชหน้าจอ)`,
-        notFound,
-      }, { status: 207 });
-    }
+    if(notFound.length) return NextResponse.json({success:false,message:'ไม่พบข้อมูลบางรายการ กรุณารีเฟรชแล้วลองใหม่',notFound},{status:409});
+    if(new Set(updates.map(row=>row.id)).size !== updates.length) return NextResponse.json({success:false,message:'รายการซ้ำในบิล'},{status:400});
+    await saveDatabaseRows(updates);
 
     invalidateCache('purchase:list');
     invalidateCache('stock:list');

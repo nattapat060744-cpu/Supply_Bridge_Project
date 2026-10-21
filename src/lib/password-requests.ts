@@ -1,4 +1,4 @@
-import type { GoogleSpreadsheetRow } from 'google-spreadsheet';
+import type { DatabaseRow } from './database';
 
 export const PASSWORD_REQUEST_STATUSES = [
   'PENDING',
@@ -29,7 +29,7 @@ export type PasswordRequestRecord = {
   adminNote: string;
 };
 
-type SheetRow = GoogleSpreadsheetRow<Record<string, string>>;
+type SheetRow = DatabaseRow;
 
 const STATUS_SET = new Set<string>(PASSWORD_REQUEST_STATUSES);
 

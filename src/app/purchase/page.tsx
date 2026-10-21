@@ -8,6 +8,7 @@ interface OrderItem {
   rowNumber?: string | number;
   id: string;
   rowUid?: string;
+  revision?: number;
   productId?: string;
   Product_ID?: string;
   productID?: string;
@@ -93,7 +94,7 @@ const fetchPendingOrders = async (retries = 2) => {
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const res = await fetch(`/api/purchase?t=${Date.now()}`, {
+      const res = await fetch('/api/purchase', {
         signal: controller.signal,
         cache: 'no-store'
       });
@@ -206,7 +207,6 @@ const fetchPendingOrders = async (retries = 2) => {
     return groups;
   }, [items, searchTerm]);
   useEffect(() => { 
-    fetchPendingOrders();
     const interval = setInterval(() => {
       // ✅ ไม่ poll ถ้าแท็บนี้ถูกซ่อนอยู่ (สลับไปแท็บอื่น/ย่อหน้าต่าง) กัน request ที่ไม่จำเป็น
       if (document.visibilityState === 'visible') {
@@ -269,7 +269,7 @@ useEffect(() => {
       qtyPerCarton: item.qtyPerCarton || '', 
       cartonUnit: item.cartonUnit || 'ลัง',
       innerUnit: item.innerUnit || 'ชิ้น',
-      notePurchase: item.notePurchase || '',
+      notePurchase: item.notePurchase ?? item.notePur ?? '',
       isRejected: false 
     }));
     setReviewItems(itemsForReview);
@@ -315,7 +315,7 @@ const handleFinalConfirm = async () => {
 
         return {
           id: item.id || item.ID || item.rowNumber, 
-          rowUid: item.rowUid || '',
+          rowUid: item.rowUid || '', revision: item.revision,
           productId: item.productId || item.Product_ID || '',
           status: finalStatus, 
           orderCarton: item.orderCarton,

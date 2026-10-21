@@ -11,7 +11,7 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 ชั่วโมง
 
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
-  if (!secret) {
+  if (!secret || secret.length < 32) {
     // ป้องกันการรันแบบไม่มี secret โดยไม่รู้ตัว (จะ sign ด้วย key ที่เดาได้)
     throw new Error(
       'Missing SESSION_SECRET in environment variables. กรุณาตั้งค่า SESSION_SECRET ใน .env.local (ความยาวอย่างน้อย 32 ตัวอักษร)'
@@ -110,7 +110,7 @@ export async function verifySessionToken(token: string | undefined | null): Prom
 
   try {
     const payload: SessionPayload = JSON.parse(new TextDecoder().decode(base64urlToBytes(payloadStr)));
-    if (!payload.exp || payload.exp < Date.now()) return null;
+    if (!payload || typeof payload.username !== 'string' || !payload.username || typeof payload.name !== 'string' || typeof payload.department !== 'string' || !Number.isFinite(payload.iat) || !Number.isFinite(payload.exp) || payload.iat > Date.now()+60000 || payload.exp <= Date.now() || payload.exp-payload.iat > SESSION_TTL_MS) return null;
     return payload;
   } catch {
     return null;

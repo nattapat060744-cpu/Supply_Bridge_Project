@@ -1,8 +1,10 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import {formatBusinessDate} from '@/lib/dates';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface HistoryItem {
   rowId: number;
+  rowUid: string;
   status: string;
   groupId: string;
   productName: string;
@@ -55,58 +57,33 @@ export default function HistoryPage() {
   const [archiveSummary, setArchiveSummary] = useState<ArchiveSummary | null>(null);
   const [archiveMessage, setArchiveMessage] = useState('');
 
-  const fetchHistory = useCallback(() => {
-    setLoading(true);
-    setItems([]);
-    setCurrentPage(1);
-    
-    fetch('/api/history', { cache: 'no-store' })
-      .then(res => res.json())
-      .then(data => {
-        const rawData = Array.isArray(data) ? data : [];
-        const extract = (obj: Record<string, unknown>, target: string) => {
-          const keys = Object.keys(obj);
-          const cleanTarget = target.replace(/_/g, '').toLowerCase();
-          const foundKey = keys.find(k => k.replace(/_/g, '').toLowerCase() === cleanTarget);
-          return foundKey ? String(obj[foundKey]) : '';
-        };
-
-        const formatted = rawData.map((item: Record<string, unknown>, index) => ({
-          rowId: Number(item.rowNumber || item.rowId || index),
-          status: extract(item, 'Status').trim().toUpperCase() || 'PENDING',
-          productName: extract(item, 'Product_Name') || 'ไม่ระบุชื่อ',
-          groupId: extract(item, 'Group_ID') || extract(item, 'Group_ID') || 'ทั่วไป',
-          supplier: extract(item, 'Supplier') || 'ไม่ระบุ Supplier',
-          qtyPerCarton: extract(item, 'Qty_Per_Carton') || '0',
-          innerUnit: extract(item, 'Inner_Unit') || 'ชิ้น',
-          orderCarton: extract(item, 'Order_Carton') || '0',
-          cartonUnit: extract(item, 'Carton_Unit') || 'กล่อง',
-          recvCarton: extract(item, 'Recv_Carton') || '-',
-          recvUnit: extract(item, 'Recv_Unit') || 'กล่อง',
-          recvQty: extract(item, 'Recv_Qty') || '0',
-          recvQtyUnit: extract(item, 'Recv_Qty_Unit') || 'ชิ้น',
-          invoiceNo: extract(item, 'Invoice_No') || '-',
-          recvDate: extract(item, 'Recv_Date') || '-',
-          receiver: extract(item, 'Receiver_Name') || '-',
-          createdAt: extract(item, 'Created_At'),
-          noteRequest: extract(item, 'Note_Request'),
-          notePurchase: extract(item, 'Note_Purchase'),
-          noteStock: extract(item, 'Note_Stock'),
-        }));
-
-        setItems(formatted);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(fetchHistory, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [fetchHistory]);
+  const [total,setTotal]=useState(0);
+  const [supplierList,setSupplierList]=useState<string[]>([]);
+  const [error,setError]=useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
+  const [refreshVersion,setRefreshVersion]=useState(0);
+  const suppliersLoaded=useRef(false);
+  const fetchHistory=useCallback(()=>{suppliersLoaded.current=false;setRefreshVersion(n=>n+1);},[]);
+  useEffect(()=>{const timer=setTimeout(()=>setDebouncedSearch(searchTerm),250);return()=>clearTimeout(timer);},[searchTerm]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    const load=async()=>{
+      setLoading(true);setError('');
+      const includeSuppliers=!suppliersLoaded.current;
+      const params=new URLSearchParams({page:String(currentPage),pageSize:String(itemsPerPage),q:debouncedSearch,status:filterStatus,supplier:filterSupplier,sort:sortOrder,includeSuppliers:includeSuppliers?'1':'0'});
+      try{
+        const res=await fetch('/api/history?'+params,{cache:'no-store',signal:controller.signal});
+        const data=await res.json();
+        if(!res.ok||!Array.isArray(data.items))throw new Error(data.message||'โหลดประวัติไม่สำเร็จ');
+        if(controller.signal.aborted)return;
+        setItems(data.items);setTotal(data.total);
+        if(includeSuppliers){setSupplierList(data.suppliers||[]);suppliersLoaded.current=true;}
+        if(data.page!==currentPage)setCurrentPage(data.page);
+      }catch(err){if(!controller.signal.aborted)setError(err instanceof Error?err.message:'โหลดประวัติไม่สำเร็จ');}
+      finally{if(!controller.signal.aborted)setLoading(false);}
+    };
+    void load();return()=>controller.abort();
+  },[currentPage,itemsPerPage,debouncedSearch,filterStatus,filterSupplier,sortOrder,refreshVersion]);
 
   useEffect(() => {
     try {
@@ -141,7 +118,7 @@ export default function HistoryPage() {
 
   const runArchive = useCallback(async () => {
     if (!archiveSummary || archiveSummary.eligibleCount === 0) return;
-    const ok = confirm(`ยืนยันย้าย ${archiveSummary.eligibleCount} รายการที่จบแล้วและเก่ากว่า ${archiveDays} วันเข้าคลังใช่ไหม?\nระบบจะคัดลอกไปแท็บ Archive รายปี แล้วลบออกจาก Orders หลังคัดลอกสำเร็จ`);
+    const ok = confirm(`ยืนยันย้าย ${archiveSummary.eligibleCount} รายการที่จบแล้วและเก่ากว่า ${archiveDays} วันเข้าคลังใช่ไหม?\nระบบจะเก็บรายการไว้ในหมวดคลังรายปี และยังค้นหาได้จากหน้าประวัติ`);
     if (!ok) return;
 
     setArchiveLoading(true);
@@ -168,42 +145,9 @@ export default function HistoryPage() {
     }
   }, [archiveDays, archiveSummary, fetchHistory]);
 
-  // ✅ ดึงรายชื่อ Supplier ทั้งหมดออกมาทำ Dropdown (ไม่ซ้ำกัน)
-  const supplierList = useMemo(() => {
-    const list = Array.from(new Set(items.map(item => item.supplier))).filter(Boolean);
-    return list.sort((a, b) => a.localeCompare(b, 'th'));
-  }, [items]);
-
-  // ✅ 1. กรองข้อมูล (Filter) และ เรียงลำดับ (Sort)
-  const filteredAndSortedItems = useMemo(() => {
-    const result = items.filter(item => {
-      const currentStatus = (item.status === 'REJECT' || item.status === 'REJECTED') ? 'REJECTED' : item.status;
-      const matchesStatus = filterStatus === 'ALL' || currentStatus === filterStatus;
-      const matchesSupplier = filterSupplier === 'ALL' || item.supplier === filterSupplier;
-      const search = searchTerm.toLowerCase();
-      const matchesSearch = item.productName.toLowerCase().includes(search) || 
-                            item.groupId.toLowerCase().includes(search) ||
-                            item.supplier.toLowerCase().includes(search);
-      
-      return matchesStatus && matchesSupplier && matchesSearch;
-    });
-
-    // เรียงลำดับข้อมูล
-    return result.sort((a, b) => {
-      if (sortOrder === 'NEWEST') return b.rowId - a.rowId; // ใหม่ไปเก่า (ใช้ rowId อ้างอิง)
-      if (sortOrder === 'OLDEST') return a.rowId - b.rowId; // เก่าไปใหม่
-      if (sortOrder === 'NAME_ASC') return a.productName.localeCompare(b.productName, 'th'); // ก-ฮ
-      if (sortOrder === 'NAME_DESC') return b.productName.localeCompare(a.productName, 'th'); // ฮ-ก
-      return 0;
-    });
-  }, [items, filterStatus, filterSupplier, searchTerm, sortOrder]);
-
-  // ✅ 2. แบ่งหน้าแสดงผล (Pagination)
-  const totalPages = Math.ceil(filteredAndSortedItems.length / itemsPerPage);
-  const paginatedItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedItems.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredAndSortedItems, currentPage, itemsPerPage]);
+  const totalPages=Math.max(1,Math.ceil(total/itemsPerPage));
+  const paginatedItems=items;
+  const statusLabels:Record<string,string>={ALL:'ทั้งหมด',PENDING:'รอจัดซื้อ',ORDERED:'สั่งซื้อแล้ว',COMPLETED:'รับสินค้าแล้ว',REJECTED:'ยกเลิก'};
 
  return (
     <div className="app-shell font-sans text-slate-900">
@@ -215,9 +159,9 @@ export default function HistoryPage() {
             <div className="flex items-center gap-4">
               <div>
                 <p className="page-kicker">Audit Trail</p>
-                <h1 className="page-title font-display">History</h1>
+                <h1 className="page-title font-display">ประวัติรายการ</h1>
               </div>
-              <button onClick={fetchHistory} className="primary-action bg-slate-950 text-white hover:bg-blue-700 shadow-lg shadow-slate-900/10">Refresh</button>
+              <button onClick={fetchHistory} className="primary-action bg-slate-950 text-white hover:bg-blue-700 shadow-lg shadow-slate-900/10">รีเฟรช</button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 w-full lg:max-w-5xl">
@@ -233,7 +177,7 @@ export default function HistoryPage() {
 
               {/* เลือก Supplier */}
               <select 
-                value={filterSupplier} onChange={(e) => {
+                aria-label="ผู้ขาย" value={filterSupplier} onChange={(e) => {
                   setFilterSupplier(e.target.value);
                   setCurrentPage(1);
                 }}
@@ -245,7 +189,7 @@ export default function HistoryPage() {
 
               {/* เรียงลำดับ */}
               <select 
-                value={sortOrder} onChange={(e) => {
+                aria-label="เรียงลำดับ" value={sortOrder} onChange={(e) => {
                   setSortOrder(e.target.value);
                   setCurrentPage(1);
                 }}
@@ -260,7 +204,7 @@ export default function HistoryPage() {
               {/* จำนวนต่อหน้า */}
               <div className="flex items-center control-field p-3 rounded-xl gap-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase">Show:</span>
-                <select value={itemsPerPage} onChange={(e) => {
+                <select aria-label="จำนวนต่อหน้า" value={itemsPerPage} onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }} className="bg-transparent font-black text-sm outline-none w-full">
@@ -281,14 +225,14 @@ export default function HistoryPage() {
                 <p className="page-kicker text-slate-500">จัดการพื้นที่ข้อมูล</p>
                 <h2 className="text-lg font-black text-slate-950">เก็บรายการที่จบแล้วเข้าคลัง</h2>
                 <p className="mt-1 text-xs font-bold text-slate-500">
-                  ตรวจสอบจำนวนก่อนเสมอ เมื่อกดย้ายจริง ระบบจะคัดลอกรายการเก่าไปแท็บคลังรายปี แล้วลบออกจาก Orders
+                  ตรวจสอบจำนวนก่อนย้าย รายการที่เก็บเข้าคลังแล้วยังค้นหาได้ในหน้าประวัติ
                 </p>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
-                  value={archiveDays}
-                  onChange={(e) => setArchiveDays(Number(e.target.value))}
+                  aria-label="อายุรายการเก็บเข้าคลัง" value={archiveDays}
+                  onChange={(e) => {setArchiveDays(Number(e.target.value));setArchiveSummary(null);setArchiveMessage('');}}
                   className="control-field rounded-xl p-3 text-sm font-bold"
                   disabled={archiveLoading}
                 >
@@ -348,19 +292,21 @@ export default function HistoryPage() {
                 filterStatus === s ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'
               }`}
             >
-              {s}
+              {statusLabels[s]}
             </button>
             
           ))}
         </div>
 
+        {error&&<div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{error} <button onClick={fetchHistory} className="underline">ลองอีกครั้ง</button></div>}
+        {loading&&items.length>0&&<p role="status" className="mb-3 text-sm text-slate-500">กำลังโหลดรายการ...</p>}
         {/* ตารางข้อมูล */}
         <div className="app-card overflow-hidden mb-6">
           <div className="overflow-x-auto">
-            {loading ? (
+            {loading && items.length===0 ? (
               <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.18em]">กำลังดึงข้อมูลล่าสุด...</div>
             ) : (
-              <table className="w-full text-left border-collapse">
+              <table aria-busy={loading} className="w-full min-w-[1100px] text-left border-collapse">
                 <thead className="bg-slate-50 text-slate-500 font-black uppercase text-[10px] tracking-[0.12em] border-b">
                   <tr>
                     <th className="p-6 whitespace-nowrap">ข้อมูลบิล</th>
@@ -373,11 +319,11 @@ export default function HistoryPage() {
                   </tr>
                 </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {paginatedItems.map((item, idx) => (
-                      <tr key={`${item.rowId}-${idx}`} className="hover:bg-slate-50/70 transition-colors">
+                    {paginatedItems.map((item) => (
+                      <tr key={item.rowUid} className="hover:bg-slate-50/70 transition-colors">
                         {/* 1. ข้อมูลบิลและวันที่สั่ง */}
                         <td className="p-6 align-top">
-                          <div className="font-black text-slate-900 mb-1">{item.createdAt}</div>
+                          <time dateTime={item.createdAt} className="block min-w-40 whitespace-nowrap font-bold text-slate-900 mb-2">{formatBusinessDate(item.createdAt)}</time>
                           <div className="text-[10px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-md inline-block">{item.groupId}</div>
                         </td>
 
@@ -445,6 +391,7 @@ export default function HistoryPage() {
                         {/* 6. ช่องข้อมูลการรับ (แยกออกมาให้ดูง่ายตามที่พี่ชายบอก) */}
                         <td className="p-6 align-top bg-slate-50/30">
                           <div className="space-y-2">
+                            <div><span className="block text-[9px] font-bold text-slate-400">วันที่รับสินค้า</span><time className="whitespace-nowrap text-xs">{formatBusinessDate(item.recvDate)}</time></div>
                             {/* ชื่อคนรับของ */}
                             <div className="flex flex-col">
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">ผู้รับของ</span>
@@ -453,23 +400,24 @@ export default function HistoryPage() {
                             {/* วันที่รับของ (ถ้ามีแยกใน DB) หรือ เลขบิล */}
                             <div className="flex flex-col">
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">เลขที่บิล / INV</span>
-                              <span className="text-[11px] font-bold text-blue-600">{item.recvDate !== '-' ? item.invoiceNo : 'ยังไม่ระบุ'}</span>
+                              <span className="text-[11px] font-bold text-blue-600">{item.invoiceNo && item.invoiceNo !== '-' ? item.invoiceNo : 'ยังไม่ระบุ'}</span>
                             </div>
                           </div>
                         </td>
 
                         {/* 7. สถานะ */}
                         <td className="p-6 text-center align-top">
-                          <div className={`px-3 py-1 rounded-md text-[10px] font-black shadow-sm inline-block ${
+                          <div className={`whitespace-nowrap px-3 py-1 rounded-md text-[10px] font-black shadow-sm inline-block ${
                             item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' :
                             item.status === 'ORDERED' ? 'bg-blue-600 text-white' : 
                             item.status === 'REJECTED' || item.status === 'REJECT' ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-900'
                           }`}>
-                            {item.status}
+                            {statusLabels[item.status]||item.status}
                           </div>
                         </td>
                       </tr>
                     ))}
+                    {!loading&&items.length===0&&<tr><td colSpan={7} className="p-12 text-center text-slate-500">ไม่พบรายการที่ตรงกับตัวกรอง</td></tr>}
                   </tbody>
               </table>
             )}
@@ -480,11 +428,11 @@ export default function HistoryPage() {
         {!loading && totalPages > 1 && (
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pb-10">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              หน้า {currentPage} / {totalPages} (ทั้งหมด {filteredAndSortedItems.length} รายการ)
+              หน้า {currentPage} / {totalPages} (ทั้งหมด {total} รายการ)
             </div>
             <div className="flex items-center gap-2">
               <button
-                disabled={currentPage === 1}
+                aria-label="หน้าก่อนหน้า" disabled={loading || currentPage === 1}
                 onClick={() => setCurrentPage(prev => prev - 1)}
                 className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
                   currentPage === 1 ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
@@ -511,7 +459,7 @@ export default function HistoryPage() {
               </div>
 
               <button
-                disabled={currentPage === totalPages}
+                aria-label="หน้าถัดไป" disabled={loading || currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => prev + 1)}
                 className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
                   currentPage === totalPages ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'

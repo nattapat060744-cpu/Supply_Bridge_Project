@@ -1,28 +1,15 @@
-﻿'use client';
+'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
+import { useSortingNotifications } from '@/lib/use-sorting-notifications';
+import { pendingNotificationKey } from '@/lib/sorting-notifications';
 
 interface User {
+  username?: string;
   name: string;
   department: string;
   email?: string;
-}
-
-interface SortingNotificationItem {
-  id: string;
-  batchId: string;
-  batchName: string;
-  message?: string;
-}
-
-interface SortingNotificationState {
-  count: number;
-  latestBatchId?: string;
-  latestBatchName?: string;
-  latestMessage?: string;
-  updatedAt?: number;
-  items?: SortingNotificationItem[];
 }
 
 const navItems = [
@@ -30,7 +17,7 @@ const navItems = [
   { href: '/purchase', label: 'จัดซื้อ', dept: 'PURCHASE' },
   { href: '/stock', label: 'สต็อก', dept: 'STOCK' },
   { href: '/history', label: 'ประวัติ', dept: 'ALL' },
-  { href: '/admin/requests', label: 'สมัครสมาชิก', dept: 'ADMIN' },
+  { href: '/admin/requests', label: 'สมาชิก', dept: 'ADMIN' },
 ];
 
 const pageMeta: Record<string, { eyebrow: string; title: string; tone: string }> = {
@@ -38,7 +25,7 @@ const pageMeta: Record<string, { eyebrow: string; title: string; tone: string }>
   '/purchase': { eyebrow: 'Procurement', title: 'ฝ่ายจัดซื้อ', tone: 'emerald' },
   '/stock': { eyebrow: 'Inventory', title: 'ฝ่ายสต็อก', tone: 'amber' },
   '/history': { eyebrow: 'Audit Trail', title: 'ประวัติรายการ', tone: 'slate' },
-  '/admin/requests': { eyebrow: 'Admin', title: 'อนุมัติสมาชิก', tone: 'slate' },
+  '/admin/requests': { eyebrow: 'Admin', title: 'สมาชิกในระบบ', tone: 'slate' },
 };
 
 const departmentStyles: Record<string, string> = {
@@ -65,32 +52,13 @@ function canAccess(user: User | null, dept: string) {
   return user.department === 'ADMIN' || user.department === dept;
 }
 
-function readSortingNotification(): SortingNotificationState {
-  try {
-    const raw = localStorage.getItem('sorting_nav_notifications');
-    if (!raw) return { count: 0 };
-
-    const parsed = JSON.parse(raw) as SortingNotificationState;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-
-    if (!parsed.updatedAt || Date.now() - parsed.updatedAt > oneDayMs) {
-      localStorage.removeItem('sorting_nav_notifications');
-      return { count: 0 };
-    }
-
-    return parsed;
-  } catch {
-    return { count: 0 };
-  }
-}
-
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSortingNotiMenu, setShowSortingNotiMenu] = useState(false);
-  const [sortingNoti, setSortingNoti] = useState<SortingNotificationState>({ count: 0 });
+  const sortingNoti = useSortingNotifications(user?.username || '', ['ADMIN','SORTING','SORTING_VIEWER','STOCK_SORTING_MANAGER'].includes(user?.department || ''));
 
   const handleLogout = useCallback(async () => {
     localStorage.removeItem('user');
@@ -107,7 +75,7 @@ export default function Navbar() {
   useEffect(() => {
     const savedUserStr = localStorage.getItem('user');
     if (savedUserStr && savedUserStr !== 'undefined') {
-      setUser(JSON.parse(savedUserStr));
+      try { setUser(JSON.parse(savedUserStr)); } catch { setUser(null); }
     }
 
     const checkMidnightLogout = () => {
@@ -125,24 +93,6 @@ export default function Navbar() {
     const interval = setInterval(checkMidnightLogout, 60000);
     return () => clearInterval(interval);
   }, [pathname, handleLogout]);
-
-  useEffect(() => {
-    setSortingNoti(readSortingNotification());
-
-    const handleSortingNotification = (event: Event) => {
-      const customEvent = event as CustomEvent<SortingNotificationState>;
-      setSortingNoti(customEvent.detail || readSortingNotification());
-    };
-    const handleStorage = () => setSortingNoti(readSortingNotification());
-
-    window.addEventListener('sorting-notifications-changed', handleSortingNotification);
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      window.removeEventListener('sorting-notifications-changed', handleSortingNotification);
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
 
   if (pathname === '/') return null;
 
@@ -164,7 +114,7 @@ export default function Navbar() {
     setShowSortingNotiMenu(false);
 
     if (pathname !== '/sorting') {
-      if (batchId) localStorage.setItem('pending_sorting_notification_batch', batchId);
+      if (batchId && user?.username) { try { sessionStorage.setItem(pendingNotificationKey(user.username), batchId); } catch { /* Navigation still works without storage. */ } }
       router.push('/sorting');
       return;
     }
@@ -245,12 +195,7 @@ export default function Navbar() {
                   <p className="mt-1 text-xs font-bold text-slate-500">{sortingNoti.count} อัปเดตใหม่</p>
                 </div>
                 <div className="max-h-80 overflow-y-auto p-2">
-                  {(sortingNoti.items?.length ? sortingNoti.items : [{
-                    id: sortingNoti.latestBatchId || 'latest',
-                    batchId: sortingNoti.latestBatchId || '',
-                    batchName: sortingNoti.latestBatchName || 'มีอัปเดตใหม่',
-                    message: sortingNoti.latestMessage,
-                  }]).map((item) => (
+                  {sortingNoti.items.map((item) => (
                     <button
                       key={item.id}
                       type="button"

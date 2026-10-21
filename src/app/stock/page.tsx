@@ -1,11 +1,16 @@
 'use client';
+import {checkedFetch} from '@/lib/checked-fetch';
+import {saveReceiptBatch} from '@/lib/save-receipts';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import {parseStockImport} from '@/lib/stock-import';
 import IssueTracking from '@/components/IssueTracking';
 
 interface StockItem {
   rowId: number;
+  rowUid?: string;
+  revision: number;
   groupId: string;
   productID: string;
   productName: string;
@@ -43,6 +48,8 @@ interface ProductGroup {
 
 interface StockUpdateData {
   rowId: number;
+  rowUid?: string;
+  revision: number;
   productID: string;
   invoiceNo: string;
   recvCarton?: number;
@@ -91,7 +98,7 @@ export default function StockPage() {
   const fetchOrderedItems = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/stock');
+      const res = await checkedFetch('/api/stock');
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -101,13 +108,6 @@ export default function StockPage() {
     }
   };
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedSupplier]);
-
-  useEffect(() => {
-    fetchOrderedItems();
-  }, []);
 
  useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -345,7 +345,7 @@ const exportToExcel = () => {
     // 3. หัวตาราง (แบ่งกลุ่มชัดเจน)
     const tableHeader = [
       "ID อ้างอิง", "วันที่สั่งซื้อ", "รหัสสินค้า", "รายการสินค้า", "หน่วยหลัก", "ยอดสั่ง (กล่อง)", "บรรจุ/กล่อง", "หน่วยย่อย", "|", 
-      "รับจริง (กล่อง)", "รับจริง (ชิ้น)", "เลขที่บิล (Invoice)", "หมายเหตุ"
+      "รับจริง (กล่อง)", "รับจริง (ชิ้น)", "เลขที่บิล (Invoice)", "หมายเหตุ", "เวอร์ชันข้อมูล", "UUID อ้างอิง"
     ];
 
     // 4. เตรียมข้อมูล Data Rows
@@ -362,7 +362,7 @@ const exportToExcel = () => {
       "", // ช่องว่างให้คีย์
       "", // ช่องว่างให้คีย์
       "", // ช่องว่างให้คีย์
-      ""  // ช่องว่างให้คีย์
+      "", item.revision, item.rowUid || "" // ข้อมูลอ้างอิง
     ]);
 
     // 5. รวมข้อมูลและสร้าง Sheet
@@ -419,22 +419,14 @@ const exportToExcel = () => {
         
         // หัวตารางอยู่ที่แถวที่ 5 ใน Excel (index คือ 4) 
         // หรือถ้าพี่นับจากไฟล์ CSV ที่ส่งมา แถวว่างมันมี 4 แถว แถวที่ 5 คือหัวตาราง
-        const parsedData = XLSX.utils.sheet_to_json<ImportRow>(sheet, { range: 4 });
-
-        const results = parsedData.filter((row: ImportRow) => {
-          // เช็คชื่อคอลัมน์ให้ตรงกับไฟล์ Excel ของพี่ชายเป๊ะๆ
-          const hasBox = row['รับจริง (กล่อง)'] !== undefined && row['รับจริง (กล่อง)'] !== '';
-          const hasPiece = row['รับจริง (ชิ้น)'] !== undefined && row['รับจริง (ชิ้น)'] !== '';
-          const hasId = row['ID อ้างอิง'] !== undefined;
-
-          return (hasBox || hasPiece) && hasId;
-        });
+        const results = parseStockImport(sheet);
 
         if (results.length === 0) {
           alert('ไม่พบข้อมูลการรับของ หรือชื่อคอลัมน์ไม่ตรงกับระบบครับพี่ชาย! ลองเช็คว่าคีย์ยอดในช่อง "รับจริง (กล่อง)" หรือยัง');
           return;
         }
         
+        if(results.some(row=>row['เวอร์ชันข้อมูล']===undefined || !row['UUID อ้างอิง'])) {alert('กรุณาดาวน์โหลดใบตรวจรับใหม่ ไฟล์นี้ไม่มีเวอร์ชันสำหรับป้องกันข้อมูลทับกัน');return;}
         setImportData(results);
         setShowImportModal(true);
         if (fileInputRef.current) fileInputRef.current.value = ''; 
@@ -535,13 +527,8 @@ const handleBatchSubmit = async () => {
     });
 
     try {
-      for (const item of selectedBatch) {
-        await fetch('/api/stock', {
-          // ✅ ใช้ method: 'PATCH' ตามโครงสร้างเดิมของพี่ชายอย่างถูกต้อง
-          method: 'PATCH', 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rowId: item.rowId,
+      await saveReceiptBatch(selectedBatch.map(item=>({
+            rowId: item.rowId, rowUid:item.rowUid, revision:item.revision,
             productID: item.productID,
             receiver: receiverName,
             // ✅ ส่งค่าดิบที่กรอกจากอินพุตตรง ๆ ไม่ผ่านการคำนวณหรือคูณเลขซ้อนแล้วครับพี่ชาย
@@ -551,9 +538,7 @@ const handleBatchSubmit = async () => {
             Recv_Qty: item.Recv_Qty || 0,
             Note_Stock: item.Note_Stock || '',
             Recv_Date: thaiDate
-          }),
-        });
-      }
+          })));
       alert('ตรวจรับเข้าสต็อกเรียบร้อยทุกรายการ!');
       setSelectedBatch(null);
       setReceiverName('');
@@ -562,7 +547,7 @@ const handleBatchSubmit = async () => {
       fetchOrderedItems();
       
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการบันทึกครับ');
+      alert(err instanceof Error?err.message:'บันทึกไม่สำเร็จ');
     } finally {
       setIsSubmitting(false);
     }
@@ -573,7 +558,8 @@ const handleBatchSubmit = async () => {
       setIsSubmitting(true);
       try {
         const updateData: StockUpdateData = {
-          rowId: updatingItem.rowId,
+          status:updatingItem.status==='COMPLETED'?'COMPLETED':undefined,
+          rowId: updatingItem.rowId, rowUid:updatingItem.rowUid, revision:updatingItem.revision,
           productID: updatingItem.productID,
           // *** เพิ่มบรรทัดนี้: เพื่อส่งเลขที่บิลที่มีอยู่กลับไปด้วย ***
           invoiceNo: updatingItem.invoiceNo || '', 
@@ -617,7 +603,7 @@ const handleBatchSubmit = async () => {
           minute: '2-digit' 
         });
 
-        await fetch('/api/stock', {
+        await checkedFetch('/api/stock', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updateData),
@@ -685,7 +671,7 @@ const handleBatchSubmit = async () => {
       "รับจริง (กล่อง)", 
       "รับจริง (ชิ้น)", 
       "เลขที่บิล", 
-      "หมายเหตุ"
+      "หมายเหตุ", "เวอร์ชันข้อมูล", "UUID อ้างอิง"
     ];
     
     // ✅ เพิ่ม item.Created_At เข้าไปใน Rows
@@ -700,7 +686,7 @@ const handleBatchSubmit = async () => {
       Number(item.qtyPerCarton || 0), 
       item.innerUnit || '-', 
       "|", 
-      "", "", "", ""
+      "", "", "", "", item.revision, item.rowUid || ""
     ]);
 
     const worksheet = XLSX.utils.aoa_to_sheet([...header, tableHeader, ...rows]);
@@ -737,74 +723,18 @@ const handleConfirmImport = async () => {
     }
 
     setIsSubmitting(true);
-    let successCount = 0;
-    let failCount = 0;
-    const skipMessages: string[] = [];
-
     try {
-      for (const row of importData) {
-        const rowId = row['ID อ้างอิง'];
-        if (!rowId) continue;
-
-        // 🔥 ตรวจสอบหน้าบ้านเบื้องต้น: ถ้าในรายการปัจจุบัน (items) ไม่มี rowId นี้แล้ว (แปลว่าอาจถูกตรวจรับไปแล้ว) ให้ข้าม
-        const isStillOrdered = items.find(item => item.rowId === Number(rowId));
-        if (!isStillOrdered) {
-          skipMessages.push(`แถวที่ ${rowId} บันทึกไปแล้ว (ข้าม)`);
-          continue;
-        }
-
-        const payload = {
-          rowId: Number(rowId),
-          receiver: receiverName,
-          recvCarton: String(row['รับจริง (กล่อง)'] || '0'),
-          Recv_Qty: String(row['รับจริง (ชิ้น)'] || '0'),
-          invoiceNo: String(row['เลขที่บิล'] || ''),
-          Note_Stock: String(row['หมายเหตุ'] || ''),
-          Recv_Date: new Date().toLocaleDateString('th-TH', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-        };
-
-        const response = await fetch('/api/stock', { 
-          method: 'PATCH', 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-          successCount++;
-        } else {
-          // ถ้าหลังบ้านบอกว่า COMPLETED แล้ว (Error 400) หรือ Error อื่นๆ
-          failCount++;
-          if (result.message) skipMessages.push(result.message);
-        }
-      }
-
-      // แสดงสรุปผลให้พี่ชายทราบ
-      let finalMessage = `บันทึกสำเร็จ ${successCount} รายการ`;
-      if (failCount > 0 || skipMessages.length > 0) {
-        finalMessage += `\nมีการข้ามหรือผิดพลาด ${failCount + skipMessages.length} รายการ`;
-        console.log("รายละเอียดการข้าม:", skipMessages);
-      }
-
-      alert(finalMessage);
-      
-      setShowImportModal(false);
-      // รีโหลดเพื่ออัปเดตข้อมูลล่าสุดจาก Sheet
-      window.location.reload(); 
-
-    } catch (error) {
-      console.error("Error:", error);
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับพี่ชาย');
-    } finally {
-      setIsSubmitting(false);
-    }
+      const payloads=importData.map(row=>({
+        rowId:Number(row['ID อ้างอิง']),rowUid:String(row['UUID อ้างอิง']||''),revision:Number(row['เวอร์ชันข้อมูล']),
+        receiver:receiverName,recvCarton:row['รับจริง (กล่อง)']??0,Recv_Qty:row['รับจริง (ชิ้น)']??0,
+        invoiceNo:String(row['เลขที่บิล']||row['เลขที่บิล (Invoice)']||''),Note_Stock:String(row['หมายเหตุ']||''),Recv_Date:new Date().toISOString()
+      }));
+      await saveReceiptBatch(payloads);
+      alert(`บันทึกสำเร็จทั้งชุด ${payloads.length} รายการ`);
+      setShowImportModal(false);setImportData([]);await fetchOrderedItems();
+    } catch(error) {
+      alert(error instanceof Error?error.message:'บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูล');
+    } finally {setIsSubmitting(false);}
   };
 
   const handleForceComplete = async (item: StockItem) => {
@@ -822,11 +752,11 @@ const handleConfirmImport = async () => {
       });
 
       // 🔥 ส่งข้อมูลไปที่ API PATCH
-      await fetch('/api/stock', {
+      await checkedFetch('/api/stock', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rowId: item.rowId,
+          rowId: item.rowId, rowUid:item.rowUid, revision:item.revision,
           productID: item.productID,
           receiver: receiverName || 'คลังสินค้า (ตัดบิลจบ)', 
           recvCarton: item.recvCarton || 0,
@@ -852,15 +782,11 @@ const handleConfirmImport = async () => {
   };
 
  const handleBulkSave = async () => {
-    if (!receiverName) return alert("กรุณาระบุชื่อผู้รับของก่อนครับพี่ชาย");
+    if (!receiverName.trim()) return alert("กรุณาระบุชื่อผู้รับของก่อนครับ");
     setIsSubmitting(true);
     try {
-      for (const item of bulkRecvList) {
-        await fetch('/api/stock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rowId: item.rowId,
+      await saveReceiptBatch(bulkRecvList.map(item=>({
+            rowId: item.rowId, rowUid:item.rowUid, revision:item.revision,
             productID: item.productID,
             receiver: receiverName,
             recvCarton: item.custom_carton || 0,
@@ -868,9 +794,7 @@ const handleConfirmImport = async () => {
             invoiceNo: item.custom_invoice || '',
             Note_Stock: item.Note_Stock || '',
             status: 'COMPLETED' // หรือสถานะตามที่ API หลังบ้านของพี่ชายกำหนดไว้
-          }),
-        });
-      }
+          })));
       alert('บันทึกทุกรายการเรียบร้อยแล้วครับพี่ชาย!');
       setBulkRecvList([]);
       setIsBulkModalOpen(false);
@@ -899,13 +823,13 @@ const handleConfirmImport = async () => {
     try {
       setIsSubmitting(true);
 
-      const res = await fetch('/api/stock', {
+      const res = await checkedFetch('/api/stock', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          rowId: updatingItem.rowId,
+          rowId: updatingItem.rowId, rowUid:updatingItem.rowUid, revision:updatingItem.revision,
           receiverName: receiverName,
           recvCarton: singleRecvCarton, // ส่งค่าดิบจากช่อง ยอดรับจริง (ลัง)
           Recv_Qty: singleRecvQty,     // ส่งค่าดิบจากช่อง บรรจุ/ลัง โดยตรง ไม่คูณเลข
@@ -978,11 +902,11 @@ const handleConfirmImport = async () => {
               placeholder="รหัสสินค้า, ชื่อสินค้า หรือ เลขบิล..."
               className="control-field w-full pl-14 pr-12 py-4 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {setSearchTerm(e.target.value);setCurrentPage(1);}}
             />
             {searchTerm && (
               <button 
-                onClick={() => setSearchTerm('')}
+                onClick={() => {setSearchTerm('');setCurrentPage(1);}}
                 className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-lg transition-all border border-slate-100"
               >
                 ✕
@@ -997,7 +921,7 @@ const handleConfirmImport = async () => {
           <div className="relative group h-full">
             <select
               value={selectedSupplier}
-              onChange={(e) => setSelectedSupplier(e.target.value)}
+              onChange={(e) => {setSelectedSupplier(e.target.value);setCurrentPage(1);}}
               className="control-field w-full h-14 px-5 rounded-xl font-black text-slate-600 appearance-none cursor-pointer"
             >
               {suppliers.map((s) => (
@@ -1322,7 +1246,7 @@ const handleConfirmImport = async () => {
                       <div className="relative">
                         <select 
                           value={selectedSupplier}
-                          onChange={(e) => setSelectedSupplier(e.target.value)}
+                          onChange={(e) => {setSelectedSupplier(e.target.value);setCurrentPage(1);}}
                           className="w-full appearance-none pl-12 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-[22px] outline-none focus:border-yellow-400 focus:bg-white font-bold text-slate-700 transition-all shadow-sm cursor-pointer"
                         >
                           <option value="all">ทุกบริษัทในระบบ</option>
@@ -1474,26 +1398,19 @@ const handleConfirmImport = async () => {
                   </div>
                   <button 
                     onClick={async () => {
+                      if(!receiverName.trim())return alert('กรุณาระบุชื่อผู้รับของ');
                       try {
                         setIsSubmitting(true);
-                        for (const item of bulkRecvList) {
-                          if (selectedSupplier !== 'all' && item.supplier !== selectedSupplier) continue;
-
-                          await fetch('/api/stock', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              rowId: item.rowId,
+                        await saveReceiptBatch(bulkRecvList.filter(item=>selectedSupplier==='all'||item.supplier===selectedSupplier).map(item=>({
+                              rowId: item.rowId, rowUid:item.rowUid, revision:item.revision,
                               receiver: receiverName,
                               recvCarton: item.custom_carton || '',
                               Recv_Qty: item.custom_qty || '',
                               invoiceNo: item.custom_invoice || '',
                               Note_Stock: item.custom_note || '',
                               Recv_Date: new Date().toLocaleString('th-TH')
-                            })
-                          });
-                        }
-                        setBulkRecvList([]);
+                            })));
+                        setBulkRecvList(previous=>previous.filter(item=>selectedSupplier!=='all'&&item.supplier!==selectedSupplier));
                         setIsBulkModalOpen(false);
                         alert('บันทึกข้อมูลแบบ Bulk เรียบร้อยครับพี่ชาย!');
                         
@@ -1504,16 +1421,16 @@ const handleConfirmImport = async () => {
                         }
                       } catch (err) {
                         console.error(err);
-                        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                        alert(err instanceof Error?err.message:'บันทึกไม่สำเร็จ');
                       } finally {
                         setIsSubmitting(false);
                       }
                     }}
                     className="px-10 py-4 bg-slate-900 text-white rounded-[22px] font-black text-sm hover:bg-slate-800 transition-all flex items-center gap-3 shadow-xl active:scale-95 disabled:opacity-30" 
-                    disabled={bulkRecvList.length === 0 || isSubmitting || !receiverName.trim()}
+                    disabled={!bulkRecvList.some(item=>selectedSupplier==='all'||item.supplier===selectedSupplier) || isSubmitting || !receiverName.trim()}
                   >
-                    {isSubmitting ? 'กำลังบันทึก...' : 'ยืนยันบันทึกทั้งหมด'}
-                    <span className="bg-yellow-400 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{bulkRecvList.length}</span>
+                    {isSubmitting ? 'กำลังบันทึกทั้งชุด...' : 'บันทึกชุดที่แสดง'}
+                    <span className="bg-yellow-400 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{bulkRecvList.filter(item=>selectedSupplier==='all'||item.supplier===selectedSupplier).length}</span>
                   </button>
                 </div>
               </div>

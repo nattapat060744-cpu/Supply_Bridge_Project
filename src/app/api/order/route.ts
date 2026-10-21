@@ -1,18 +1,10 @@
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
+import { StockDatabase } from '@/lib/database';
 import { NextResponse } from 'next/server';
 import { toSafeNonNegativeNumber, toSafeString, safeErrorResponse } from '@/lib/api-utils';
 import { invalidateCache } from '@/lib/sheet-cache';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth';
 
 type OrderRequestItem = Record<string, unknown>;
-
-// ฟังก์ชันสร้าง Auth (แยกไว้จะได้ไม่เขียนซ้ำ)
-const getAuth = () => new JWT({
-  email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-  key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
 
 function getCookieValue(cookieHeader: string | null, name: string): string | undefined {
   if (!cookieHeader) return undefined;
@@ -29,7 +21,7 @@ async function requireOrderWriteAccess(req: Request) {
 
   if (!session || (session.department !== 'ADMIN' && session.department !== 'SORTING' && session.department !== 'STOCK_SORTING_MANAGER')) {
     return NextResponse.json(
-      { success: false, error: 'FORBIDDEN', message: 'This account can view sorting data only.' },
+      { success: false, error: 'FORBIDDEN', message: 'บัญชีนี้มีสิทธิ์ดูข้อมูลธุรการคลังเท่านั้นครับ' },
       { status: 403 }
     );
   }
@@ -49,13 +41,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'รายการสินค้า (items) ต้องไม่ว่าง' }, { status: 400 });
     }
 
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, getAuth());
+    const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByTitle['Orders'];
 
     const rows = items.map((item: OrderRequestItem) => ({
       'Group_ID': toSafeString(groupId),
-      'Row_UID': crypto.randomUUID(), // ✅ ให้สอดคล้องกับแถวที่สร้างจาก /api/purchase
+      'Row_UID': crypto.randomUUID(),
       'Group_Name': toSafeString(groupName),
       'Status': 'PENDING',
       'Product_ID': toSafeString(item.productId),
@@ -64,7 +56,7 @@ export async function POST(req: Request) {
       'Shop_Qty': toSafeNonNegativeNumber(item.shopQty, 0),
       'Stock_Qty': toSafeNonNegativeNumber(item.stockQty, 0),
       'Note_Request': toSafeString(item.note),
-      'Created_At': new Date().toLocaleString('th-TH'),
+      'Created_At': new Date().toLocaleString('th-TH', {timeZone:'Asia/Bangkok'}),
       'Created_At_P': toSafeString(item.Created_At_P || ''),
       'Order_Carton': '', 'Carton_Unit': '', 'Order_Qty': '', 'Inner_Unit': '', 'Qty_Per_Carton': '', 'Note_Purchase': '',
       'Recv_Carton': '', 'Recv_Carton_Unit': '', 'Recv_Unit': '', 'Recv_Qty': '', 'Recv_Qty_Unit': '', 'Recv_Date': '', 'Note_Stock': '',
@@ -82,12 +74,15 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, getAuth());
+    const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByTitle['Orders'];
     const rows = await sheet.getRows();
 
     const data = rows.map(row => ({
+      Row_UID: row.id,
+      Revision: row.revision,
+      ChangeSignature:row.signature,
       Group_ID: row.get('Group_ID'),
       Group_Name: row.get('Group_Name'),
       Status: row.get('Status'),
@@ -124,26 +119,24 @@ export async function PUT(req: Request) {
     const forbidden = await requireOrderWriteAccess(req);
     if (forbidden) return forbidden;
 
-    // เพิ่ม oldId เพื่อใช้ค้นหาแถวเดิมก่อนที่จะถูกทับด้วยค่าใหม่
-    const { oldId, id, groupId, productName, shopQty, stockQty, note, supplier } = await req.json();
+    const { rowUid, revision, id, productName, shopQty, stockQty, note, supplier } = await req.json();
 
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, getAuth());
+    const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByTitle['Orders'];
     const rows = await sheet.getRows();
 
-    // ค้นหาแถวโดยใช้ oldId (ไอดีเดิม) และ groupId
-    const row = rows.find(r => r.get('Product_ID') === oldId && r.get('Group_ID') === groupId);
+    const row = rows.find(r => r.id === rowUid);
 
     if (row) {
-      // บันทึกค่าใหม่ทับลงไป รวมถึง Product_ID และ Supplier
-      row.set('Product_ID', id); 
+      row.expectRevision(revision);
+      row.set('Product_ID', id);
       row.set('Product_Name', productName);
       row.set('Shop_Qty', shopQty);
       row.set('Stock_Qty', stockQty);
       row.set('Note_Request', note);
       row.set('Supplier', supplier);
-      
+
       await row.save();
       invalidateCache('purchase:list');
       invalidateCache('stock:list');
@@ -157,25 +150,24 @@ export async function PUT(req: Request) {
   }
 }
 
-// ✅ เพิ่มฟังก์ชันลบรายการ (DELETE)
 export async function DELETE(req: Request) {
   try {
     const forbidden = await requireOrderWriteAccess(req);
     if (forbidden) return forbidden;
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    const groupId = searchParams.get('groupId');
+    const rowUid = searchParams.get('rowUid');
+    const revision = searchParams.has('revision') ? Number(searchParams.get('revision')) : undefined;
 
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, getAuth());
+    const doc = new StockDatabase();
     await doc.loadInfo();
     const sheet = doc.sheetsByTitle['Orders'];
     const rows = await sheet.getRows();
 
-    // ค้นหาแถวที่ Product_ID และ Group_ID ตรงกัน
-    const row = rows.find(r => r.get('Product_ID') === id && r.get('Group_ID') === groupId);
+    const row = rows.find(r => r.id === rowUid);
 
     if (row) {
+      row.expectRevision(revision);
       await row.delete();
       invalidateCache('purchase:list');
       invalidateCache('stock:list');

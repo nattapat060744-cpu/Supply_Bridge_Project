@@ -1,11 +1,16 @@
-﻿'use client';
-import { useState, useEffect, useRef, useMemo } from 'react';
+'use client';
+import { parseBusinessDate } from '@/lib/dates';
+import { acknowledgeSortingBatch,currentNotificationUser,NOTIFICATION_EVENT,notificationRowKey,pendingNotificationKey,readNotificationState } from '@/lib/sorting-notifications';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import IssueTracking from '@/components/IssueTracking';
 
 interface OrderItem {
+  Row_UID?: string;
+  ChangeSignature?: string;
+  Revision?: number;
   tempId?: number;
   id: string;
   Product_ID?: string;
@@ -65,35 +70,7 @@ interface DuplicateWarning {
   pendingAction?: () => void;
 }
 
-const parseThaiDate = (rawDate: string | number | Date) => {
-  if (!rawDate) return new Date(0);
-  
-  let date: Date;
-
-  if (rawDate instanceof Date) {
-    date = rawDate;
-  } else if (typeof rawDate === 'string') {
-    const [datePart, timePart] = rawDate.split(' ');
-    const [d, m, y] = datePart.split('/').map(Number);
-    
-    const yearAD = y > 2500 ? y - 543 : y;
-    
-    if (timePart) {
-      const [hh, mm, ss] = timePart.split(':').map(Number);
-      date = new Date(yearAD, m - 1, d, hh, mm, ss);
-    } else {
-      date = new Date(yearAD, m - 1, d);
-    }
-  } else {
-    date = new Date(rawDate);
-  }
-
-  if (!isNaN(date.getTime())) {
-    date.setHours(date.getHours() + 7);
-  }
-
-  return date;
-};
+const parseThaiDate = parseBusinessDate;
 
   const exportToExcel = async (batchId: string, activeBatches: Record<string, OrderItem[]>) => {
     const batchItems = activeBatches[batchId];
@@ -125,7 +102,7 @@ const parseThaiDate = (rawDate: string | number | Date) => {
       const row = worksheet.getRow(rowNum);
       row.height = 25;
       row.eachCell((cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // เน€เธซเธฅเธทเธญเธเธเธฃเธตเธกเธญเนเธญเธ
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E0' } }; // สีครีมอ่อน
         cell.font = { bold: true, size: 10, color: { argb: 'FF444444' } };
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         cell.border = {
@@ -177,19 +154,19 @@ const parseThaiDate = (rawDate: string | number | Date) => {
   });
 
   worksheet.columns = [
-    { width: 18 }, // เธฃเธซเธฑเธช
-    { width: 45 }, // ชื่อสินค้า (เธเธงเนเธฒเธเธเธดเน€เธจเธฉ)
-    { width: 25 }, // เธเธฑเธเธเธฅเธฒเธขเน€เธญเธญเธฃเน
+    { width: 18 }, // รหัส
+    { width: 45 }, // ชื่อสินค้า (กว้างพิเศษ)
+    { width: 25 }, // บริษัทซัพพลายเออร์
     { width: 15 }, // สถานะ
-    { width: 12 }, // เธฅเนเธญเธ
+    { width: 12 }, // ล็อก
     { width: 10 }, // สต็อก
-    { width: 15 }, // เธงเธฑเธเธ—เธตเน
+    { width: 15 }, // วันที่
     { width: 10 }, // จำนวน (ลัง)
-    { width: 10 }, // เธซเธเนเธงเธข
+    { width: 10 }, // หน่วย
     { width: 10 }, // จำนวน (ชิ้น)
-    { width: 10 }, // เธซเธเนเธงเธข
-    { width: 20 }, // หมายเหตุเธเธทเนเธญ
-    { width: 20 }  // หมายเหตุเน€เธฃเธตเธขเธ
+    { width: 10 }, // หน่วย
+    { width: 20 }, // หมายเหตุจัดซื้อ
+    { width: 20 }  // หมายเหตุฝ่ายธุรการคลัง
   ];
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -209,21 +186,18 @@ export default function SortingPage() {
   const canManageSorting = currentDepartment === 'SORTING' || currentDepartment === 'ADMIN' || currentDepartment === 'STOCK_SORTING_MANAGER';
   const canExportSorting = canManageSorting || currentDepartment === 'SORTING_VIEWER';
 
+  const [pendingScrollBatch,setPendingScrollBatch] = useState<string | null>(null);
+  const fetchInFlight = useRef(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
-  const previousDataRef = useRef<{ [key: string]: string }>({});
-  const isInitialLoadRef = useRef(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const lastAlertedSnapshotRef = useRef<{ [key: string]: string }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  const hasAutoScrolled = useRef<string | null>(null);
 
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [originalId, setOriginalId] = useState(''); // โ… 1. เน€เธเธดเนเธกเธเธฃเธฃเธ—เธฑเธ”เธเธตเนเน€เธเธทเนเธญเธฅเนเธญเธ ID เน€เธ”เธดเธก
+  const [originalId, setOriginalId] = useState(''); // ✅ 1. เพิ่มบรรทัดนี้เพื่อล็อก ID เดิม
 
   const [batchName, setBatchName] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -281,29 +255,6 @@ const allFilteredBatchIds = useMemo(() => {
 
 }, [activeBatches, searchTerm]);
 
- useEffect(() => {
-  const latestBatchId = notifications.length > 0 ? notifications[notifications.length - 1].batchId : null;
-
-  if (latestBatchId && hasAutoScrolled.current !== latestBatchId) {
-    
-
-    const element = document.getElementById(`batch-${latestBatchId}`);
-    
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
-      hasAutoScrolled.current = latestBatchId;
-      
-      console.log("Auto scrolled to:", latestBatchId);
-    }
-  }
-
-  if (notifications.length === 0) {
-    hasAutoScrolled.current = null;
-  }
-
-}, [notifications, currentPage]); 
-
   const stats = useMemo(() => {
       const total = allFilteredBatchIds.length; 
       const ordered = allFilteredBatchIds.filter(bid => {
@@ -319,153 +270,49 @@ const allFilteredBatchIds = useMemo(() => {
       return { total, ordered, completed };
     }, [allFilteredBatchIds, activeBatches]);
 const clearBatchNotifications = (batchId: string) => {
-  setNotifications(prev => prev.filter(n => n.batchId !== batchId));
-      
-      const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
-      dismissed[batchId] = true; 
-      localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
-
-      const currentSnapshot = JSON.stringify(activeBatches[batchId] || []);
-      localStorage.setItem(`snapshot_${batchId}`, currentSnapshot);
-
-      setUpdatedItems(prev => {
-        const next = new Set(prev);
-        Array.from(next).forEach(key => {
-          if (key.startsWith(`${batchId}-`)) next.delete(key);
-        });
-        return next;
-      });
-    };
-
-  const handleAcknowledge = (batchId: string) => {
-    const batchIndex = allFilteredBatchIds.indexOf(batchId);
-    if (batchIndex !== -1) {
-      const targetPage = Math.floor(batchIndex / itemsPerPage) + 1;
-      setCurrentPage(targetPage);
-    }
-    setExpandedBatches(prev => ({ ...prev, [batchId]: true }));
-    clearBatchNotifications(batchId);
-    setTimeout(() => {
-      const element = document.getElementById(`batch-${batchId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
+    acknowledgeSortingBatch(currentNotificationUser(),batchId,activeBatches[batchId]||[]);
   };
-
-  useEffect(() => {
-    const latestNotification = notifications[0] || null;
-    const payload = {
-      count: notifications.length,
-      latestBatchId: latestNotification?.batchId,
-      latestBatchName: latestNotification?.batchName,
-      latestMessage: latestNotification?.productName,
-      updatedAt: Date.now(),
-      items: notifications.map((notification) => ({
-        id: notification.id,
-        batchId: notification.batchId,
-        batchName: notification.batchName,
-        message: notification.productName,
-      })),
+  const handleAcknowledge = useCallback((batchId: string) => {
+    const ids=Object.keys(activeBatches).sort((a,b)=>parseThaiDate(activeBatches[b][0]?.createdAt||'').getTime()-parseThaiDate(activeBatches[a][0]?.createdAt||'').getTime());
+    const batchIndex=ids.indexOf(batchId);
+    if(batchIndex<0)return;
+    setSearchTerm('');
+    setCurrentPage(Math.floor(batchIndex/itemsPerPage)+1);
+    setExpandedBatches(prev=>({...prev,[batchId]:true}));
+    setPendingScrollBatch(batchId);
+  },[activeBatches]);
+  useEffect(()=>{
+    const sync=()=>{
+      const state=readNotificationState(currentNotificationUser());
+      setNotifications(state.notices.map(n=>({id:n.id,batchId:n.batchId,batchName:n.batchName,productName:n.message,message:n.message})));
+      setUpdatedItems(new Set(state.notices.flatMap(n=>n.changedKeys)));
     };
-
-    localStorage.setItem('sorting_nav_notifications', JSON.stringify(payload));
-    window.dispatchEvent(new CustomEvent('sorting-notifications-changed', { detail: payload }));
-  }, [notifications]);
-
-  useEffect(() => {
-    const openLatestNotification = (event?: Event) => {
-      const customEvent = event as CustomEvent<{ batchId?: string }> | undefined;
-      const requestedBatchId = customEvent?.detail?.batchId || localStorage.getItem('pending_sorting_notification_batch') || '';
-      const targetNotification = notifications.find((notification) => notification.batchId === requestedBatchId) || notifications[0];
-
-      if (targetNotification) {
-        localStorage.removeItem('pending_sorting_notification_batch');
-        handleAcknowledge(targetNotification.batchId);
+    sync();
+    window.addEventListener(NOTIFICATION_EVENT,sync);
+    window.addEventListener('storage',sync);
+    return()=>{window.removeEventListener(NOTIFICATION_EVENT,sync);window.removeEventListener('storage',sync);};
+  },[]);
+  useEffect(()=>{
+    const open=(event?:Event)=>{
+      const key=pendingNotificationKey(currentNotificationUser());
+      let queued='';try{queued=sessionStorage.getItem(key)||'';}catch{/* Storage may be disabled. */}
+      const requested=(event as CustomEvent<{batchId?:string}>)?.detail?.batchId||queued;
+      // Never open an unrelated bill when a requested notification was already read.
+      const target=requested||notifications[0]?.batchId;
+      if(target&&activeBatches[target]){
+        try{sessionStorage.removeItem(key);}catch{/* No persistent queue available. */}
+        handleAcknowledge(target);
       }
     };
-
-    window.addEventListener('sorting-notification-open', openLatestNotification);
-
-    if (localStorage.getItem('pending_sorting_notification_batch')) {
-      openLatestNotification();
-    }
-
-    return () => window.removeEventListener('sorting-notification-open', openLatestNotification);
-  }, [notifications]);
-  const trackChanges = (newData: OrderItem[]) => {
-      const batchUpdates: { [key: string]: { count: number; batchName: string, items: OrderItem[] } } = {};
-      let hasSnapshotChange = false;
-
-
-      newData.forEach(item => {
-        if (!item.batchId) return;
-        if (!batchUpdates[item.batchId]) {
-          batchUpdates[item.batchId] = { count: 0, batchName: item.batchName || item.batchId, items: [] };
-        }
-        batchUpdates[item.batchId].items.push(item);
-      });
-
-      const dismissed = JSON.parse(localStorage.getItem('dismissed_batches') || '{}');
-
-      Object.entries(batchUpdates).forEach(([bid, info]) => {
-        const currentBatchString = JSON.stringify(info.items);
-        const lastSnapshot = localStorage.getItem(`snapshot_${bid}`);
-
-        if (lastSnapshot === currentBatchString && dismissed[bid]) {
-          return; 
-        }
-
-        let changeCount = 0;
-        info.items.forEach(item => {
-          const itemKey = `${item.batchId}-${item.id}`;
-          const currentItemSnap = `${item.status}|${item.orderCarton}|${item.Note_Purchase}|${item.Recv_Carton}|${item.Note_Stock}`;
-          const prevItemSnap = previousDataRef.current[itemKey];
-
-          if (!isInitialLoadRef.current && prevItemSnap && prevItemSnap !== currentItemSnap) {
-            changeCount++;
-            setUpdatedItems(prev => new Set(prev).add(itemKey));
-          }
-          
-          if (prevItemSnap !== currentItemSnap) {
-            previousDataRef.current[itemKey] = currentItemSnap;
-            hasSnapshotChange = true;
-          }
-        });
-
-        if (changeCount > 0 && !dismissed[bid]) {
-          if (lastAlertedSnapshotRef.current[bid] !== currentBatchString) {
-            lastAlertedSnapshotRef.current[bid] = currentBatchString;
-
-            setNotifications(prev => {
-              if (prev.some(n => n.batchId === bid)) return prev;
-
-              return [{
-              id: `${Date.now()}-${bid}`,
-              batchId: bid,
-              batchName: info.batchName,
-              productName: `พบอัปเดตใหม่ ${changeCount} รายการ`,
-              message: `มีการแก้ไขข้อมูลในบิลนี้`
-              }, ...prev].slice(0, 5);
-            });
-
-            if (audioRef.current) audioRef.current.play().catch(() => {});
-            
-            localStorage.setItem(`snapshot_${bid}`, currentBatchString);
-          }
-        } else if (changeCount > 0 && dismissed[bid]) {
-          delete dismissed[bid];
-          localStorage.setItem('dismissed_batches', JSON.stringify(dismissed));
-        }
-      });
-
-      if (hasSnapshotChange) {
-        localStorage.setItem('sampeng_snapshot_live', JSON.stringify(previousDataRef.current));
-      }
-      if (isInitialLoadRef.current) isInitialLoadRef.current = false;
-    };
+    window.addEventListener('sorting-notification-open',open);
+    let queued=false;try{queued=!!sessionStorage.getItem(pendingNotificationKey(currentNotificationUser()));}catch{/* No queued item. */}
+    if(queued)open();
+    return()=>window.removeEventListener('sorting-notification-open',open);
+  },[notifications,activeBatches,handleAcknowledge]);
 
 const fetchStatus = async () => {
+    if(fetchInFlight.current)return;
+    fetchInFlight.current=true;
     try {
       const res = await fetch('/api/order'); 
       if (!res.ok) return;
@@ -505,7 +352,7 @@ const fetchStatus = async () => {
         Note_Stock: item.Note_Stock || ''
       }));
 
-      trackChanges(normalizedData);
+
 
       const grouped = normalizedData.reduce<Record<string, OrderItem[]>>((acc, item) => {
         const key = item.batchId || 'no-batch';
@@ -518,7 +365,7 @@ const fetchStatus = async () => {
       
     } catch (err) {
       console.error("Fetch status error:", err);
-    }
+    } finally { fetchInFlight.current=false;setLoading(false); }
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -550,14 +397,24 @@ const fetchStatus = async () => {
 
       return groups;
     }, [currentBatchIds, activeBatches]);
+  useEffect(()=>{
+    if(!pendingScrollBatch)return;
+    const element=document.getElementById(`batch-${pendingScrollBatch}`);
+    if(element){
+      element.scrollIntoView({behavior:'smooth',block:'center'});
+      acknowledgeSortingBatch(currentNotificationUser(),pendingScrollBatch,activeBatches[pendingScrollBatch]||[]);
+      setPendingScrollBatch(null);
+    }
+  },[pendingScrollBatch,groupedByDate,activeBatches]);
+
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       if (typeof window === 'undefined') return;
 
       const savedUserStr = localStorage.getItem('user');
-      const lastLoginDate = localStorage.getItem('loginDate'); // 1. เธ”เธถเธเธงเธฑเธเธ—เธตเนเธเธฒเธเน€เธเธฃเธทเนเธญเธเธกเธฒ
-      const today = new Date().toLocaleDateString('th-TH');    // 2. เธชเธฃเนเธฒเธเธงเธฑเธเธ—เธตเนเธเธฑเธเธเธธเธเธฑเธ (เนเธ—เธข)
+      const lastLoginDate = localStorage.getItem('loginDate'); // 1. ดึงวันที่เข้าเครื่องมา
+      const today = new Date().toLocaleDateString('th-TH');    // 2. สร้างวันที่ปัจจุบัน (ไทย)
 
       if (!savedUserStr || savedUserStr === "undefined" || lastLoginDate !== today) {
         router.push('/');
@@ -585,15 +442,8 @@ const fetchStatus = async () => {
   }, [router]);
 
   useEffect(() => {
-      const savedSnapshot = localStorage.getItem('sampeng_snapshot_live');
-      if (savedSnapshot) {
-        previousDataRef.current = JSON.parse(savedSnapshot);
-      }
-      
-      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      
       const interval = setInterval(() => {
-        // โ… เนเธกเน poll เธ–เนเธฒเนเธ—เนเธเธเธตเนเธ–เธนเธเธเนเธญเธเธญเธขเธนเน เธเธฑเธ request เธ—เธตเนเนเธกเนเธเธณเน€เธเนเธ
+        // ✅ ไม่ poll ถ้าแท็บนี้ถูกซ่อนอยู่ กัน request ที่ไม่จำเป็น
         if (document.visibilityState === 'visible') {
           fetchStatus();
         }
@@ -601,9 +451,7 @@ const fetchStatus = async () => {
       return () => clearInterval(interval);
     }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+
 
   const addItemToTempList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -611,7 +459,7 @@ const fetchStatus = async () => {
       return alert("กรอกข้อมูลให้ครบก่อนครับ (รหัส, ชื่อ, และจำนวน)");
     }
     
-    // เธ•เธฃเธงเธเธชเธญเธ Duplicate Order
+    // ตรวจสอบ Duplicate Order
     checkDuplicateOrder(formData);
   };
 
@@ -620,8 +468,8 @@ const fetchStatus = async () => {
       const res = await fetch('/api/order');
       const orders = await res.json();
       
-      // เธซเธฒ order เธ—เธตเน Product_ID เธ•เธฃเธเธเธฑเธ เนเธฅเธฐ เธขเธฑเธเนเธกเนเนเธ”เนเธฃเธฑเธ (Recv_Date เธงเนเธฒเธ)
-      // เนเธฅเธฐ Status เนเธกเนเนเธเน COMPLETED เธซเธฃเธทเธญ REJECTED
+      // หา order ที่ Product_ID ตรงกัน และยังไม่ได้รับ (Recv_Date ว่าง)
+      // และ Status ไม่ใช่ COMPLETED หรือ REJECTED
       const existingOrder = orders.find((order: OrderItem) => 
         order.Product_ID === product.id && 
         (!order.Recv_Date || order.Recv_Date.trim() === '') &&
@@ -630,29 +478,29 @@ const fetchStatus = async () => {
       );
       
       if (existingOrder) {
-        // เธชเธฃเนเธฒเธเธเนเธญเธเธงเธฒเธกเนเธชเธ”เธเธเธดเธฅเธเธฃเนเธญเธกเธงเธฑเธเธ—เธตเน
+        // สร้างข้อความแสดงบิลพร้อมวันที่
         let dateStr = '';
         
-        // เธเธขเธฒเธขเธฒเธกเธญเนเธฒเธเธงเธฑเธเธ—เธตเนเธเธฒเธเธซเธฅเธฒเธขเธ—เธตเน
+        // พยายามอ่านวันที่จากหลายรูปแบบ
         if (existingOrder.Created_At && existingOrder.Created_At.trim() !== '') {
           try {
-            // เธ–เนเธฒ Created_At เน€เธเนเธ Thai date format เน€เธเนเธ "28/06/2569 10:30:00"
+            // ถ้า Created_At เป็น Thai date format เช่น "28/06/2569 10:30:00"
             const date = parseThaiDate(existingOrder.Created_At);
             if (!isNaN(date.getTime())) {
               dateStr = date.toLocaleDateString('th-TH');
             }
           } catch (e) {
-            // เธ–เนเธฒ parse เนเธกเนเนเธ”เนเนเธเนเธงเธฑเธเธ—เธตเนเน€เธ”เธดเธก
+            // ถ้า parse ไม่ได้ใช้วันที่เดิม
             dateStr = existingOrder.Created_At;
           }
         }
         
-        // เธ–เนเธฒเธซเธฒเธงเธฑเธเธ—เธตเนเนเธกเนเนเธ”เนเนเธซเนเนเธชเธ”เธเนเธเนเธเธทเนเธญเธเธดเธฅ
+        // ถ้าหาวันที่ไม่ได้ให้แสดงแค่ชื่อบิล
         const billInfo = dateStr 
-          ? `${existingOrder.Group_Name || 'เธเธฒเธฃเธชเธฑเนเธเธเธทเนเธญ'} (${dateStr})`
-          : `${existingOrder.Group_Name || 'เธเธฒเธฃเธชเธฑเนเธเธเธทเนเธญ'}`;
+          ? `${existingOrder.Group_Name || 'การสั่งซื้อ'} (${dateStr})`
+          : `${existingOrder.Group_Name || 'การสั่งซื้อ'}`;
         
-        // เน€เธเธญเธชเธดเธเธเนเธฒเธ—เธตเนเธขเธฑเธเนเธกเนเนเธ”เนเธฃเธฑเธ - เนเธชเธ”เธ Warning Modal
+        // เจอสินค้าที่ยังไม่ได้รับ - แสดง Warning Modal
         setDuplicateWarning({
           isOpen: true,
           productId: product.id,
@@ -661,12 +509,12 @@ const fetchStatus = async () => {
           pendingAction: () => proceedAddItem(product)
         });
       } else {
-        // เนเธกเนเน€เธเธญเธชเธดเธเธเนเธฒเธ—เธตเนเธเนเธฒเธเธญเธขเธนเน - เน€เธเธดเนเธกเน€เธเนเธฒเธฅเธดเธชเธ•เนเน€เธฅเธข
+        // ไม่เจอสินค้าที่ค้างอยู่ - เพิ่มเข้าลิสต์เลย
         proceedAddItem(product);
       }
     } catch (err) {
       console.error("Error checking duplicate:", err);
-      // เธ–เนเธฒเธกเธต error เนเธซเนเน€เธเธดเนเธกเนเธเธเธเธเธ•เธด
+      // ถ้ามี error ให้เพิ่มแบบปกติ
       proceedAddItem(product);
     }
   };
@@ -679,7 +527,7 @@ const fetchStatus = async () => {
   };
 
   const submitBatch = async () => {
-      if (items.length === 0 || !batchName.trim()) return alert("เธเธฃเธธเธ“เธฒเธ•เธฑเนเธเธเธทเนเธญเธฃเธญเธเนเธฅเธฐเน€เธเธดเนเธกเธชเธดเธเธเนเธฒเธเนเธญเธเธเธฃเธฑเธ");
+      if (items.length === 0 || !batchName.trim()) return alert("กรุณาตั้งชื่อรอบและเพิ่มสินค้าก่อนครับ");
       
       setIsSubmitting(true);
 
@@ -714,32 +562,32 @@ const fetchStatus = async () => {
           setIsModalOpen(false);
           if (typeof fetchStatus === 'function') fetchStatus();
         } else {
-          alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเธชเนเธเธเนเธญเธกเธนเธฅเธเธฃเธฑเธ');
+          alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
         }
       } catch (error) {
         console.error('Error submitting items:', error);
-        alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญเธเธฃเธฑเธ');
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อครับ');
       } finally {
         setIsSubmitting(false);
       }
     };
 
     const handleDeleteItem = async (item: OrderItem) => {
-    if (!confirm(`เธขเธทเธเธขเธฑเธเธเธฒเธฃลบเธฃเธฒเธขเธเธฒเธฃ "${item.name}" เนเธเนเธซเธฃเธทเธญเนเธกเน?`)) return;
+    if (!confirm(`ยืนยันการลบรายการ "${item.name}" ใช่หรือไม่?`)) return;
 
     try {
-      const res = await fetch(`/api/order?id=${item.id}&groupId=${item.batchId}`, {
+      const res = await fetch(`/api/order?${new URLSearchParams({rowUid:item.Row_UID || '',revision:String(item.Revision ?? '')})}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        alert('ส่งบิลเรียบร้อยแล้วครับ!');
-        fetchStatus(); // เธเธฑเธเธเนเธเธฑเธเนเธซเธฅเธ”เธเนเธญเธกเธนเธฅเนเธซเธกเนเธ—เธตเนเธเธตเนเธกเธตเธญเธขเธนเนเนเธฅเนเธง
+        alert('ลบข้อมูลเรียบร้อยแล้วครับ!');
+        fetchStatus(); // อัปเดตหน้าจอใหม่หลังลบข้อมูลเรียบร้อยแล้ว
       } else {
-        alert('ลบเนเธกเนเธชเธณเน€เธฃเนเธ');
+        const failure=await res.json(); alert(failure.message || 'ลบไม่สำเร็จครับ');
       }
     } catch (err) {
       console.error('Failed to delete item:', err);
-      alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญ');
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
     }
   };
 
@@ -752,8 +600,8 @@ const fetchStatus = async () => {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            oldId: originalId,           // โ… เนเธเน ID เธ”เธฑเนเธเน€เธ”เธดเธกเธ—เธตเนเน€เธฃเธฒเธฅเนเธญเธเนเธงเน
-            id: editingItem.id,          // เธเนเธฒ ID เนเธซเธกเนเธเธฒเธเธเนเธญเธ Input
+            rowUid:editingItem.Row_UID, revision:editingItem.Revision, oldId: originalId,           // ✅ ใช้ ID ตั้งเดิมที่เราล็อกไว้
+            id: editingItem.id,          // ค่า ID ใหม่จากช่อง Input
             groupId: editingItem.batchId,
             productName: editingItem.name,
             shopQty: Number(editingItem.storeQty),
@@ -764,16 +612,16 @@ const fetchStatus = async () => {
         });
 
         if (res.ok) {
-          alert('ส่งบิลเรียบร้อยแล้วครับ!');
+          alert('อัปเดตข้อมูลเรียบร้อยแล้วครับ!');
           setIsEditModalOpen(false);
           fetchStatus();
         } else {
           const errorData = await res.json();
-          alert(`โ อัปเดตเนเธกเนเธชเธณเน€เธฃเนเธ: ${errorData.error || 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃ'}`);
+          alert(`⚠️ อัปเดตไม่สำเร็จ: ${errorData.message || errorData.error || 'ไม่พบรายการ'}`);
         }
       } catch (err) {
         console.error('Failed to update item:', err);
-        alert('เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญ');
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
       }
     };
 
@@ -818,7 +666,7 @@ const fetchStatus = async () => {
               placeholder="ค้นหาบิล หรือชื่อสินค้า..." 
               className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm || ''}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
           <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-55">
@@ -849,7 +697,7 @@ const fetchStatus = async () => {
               {Object.entries(groupedByDate).map(([dateLabel, batchesInDate]) => (
                 <div key={dateLabel} className="space-y-6">
                   
-                  {/* --- เธชเนเธงเธเธซเธฑเธงเธเนเธญเธงเธฑเธเธ—เธตเน (Date Header) --- */}
+                  {/* --- ส่วนหัวของวันที่ (Date Header) --- */}
                   <div className="flex items-center gap-4 py-4">
                     <div className="h-px flex-1 bg-slate-200"></div>
                     <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
@@ -861,9 +709,9 @@ const fetchStatus = async () => {
                     <div className="h-px flex-1 bg-slate-200"></div>
                   </div>
 
-                  {/* เธฃเธฒเธขเธเธฒเธฃเธเธดเธฅเธเธญเธเธงเธฑเธเธเธฑเนเธเน */}
-                  {/* batchesInDate เธญเธฒเธเธเธฐเน€เธเนเธ Array เธเธญเธ string เธซเธฃเธทเธญ object เธเธถเนเธเธญเธขเธนเนเธเธฑเธเนเธเธฃเธเธชเธฃเนเธฒเธ groupedByDate เธเธญเธเธเธตเนเธเธฒเธข */}
-                  {/* เนเธเธ—เธตเนเธเธตเนเธเธกเนเธเนเนเธซเนเธฃเธญเธเธฃเธฑเธเธ—เธฑเนเธเนเธเธ string เนเธฅเธฐเนเธเธเธ—เธตเนเธกเธต .batchId เธเธฃเธฑเธ */}
+                  {/* รายการบิลของวันนั้นๆ */}
+                  {/* batchesInDate อาจจะเป็น Array ของ string หรือ object ขึ้นอยู่กับโครงสร้าง groupedByDate ของฝั่งบน */}
+                  {/* โค้ดนี้เผื่อไว้ให้รองรับทั้งแบบ string และแบบที่มี .batchId ครับ */}
                   {batchesInDate.map((item: string | DateBatchGroup) => {
                     const batchId = typeof item === 'string' ? item : item.batchId;
                     const batchItems = activeBatches[batchId];
@@ -892,18 +740,18 @@ const fetchStatus = async () => {
                       currentIcon = '🛒';
                     }
 
-                    const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(`${batchId}-${item.id}`));
+                    const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(notificationRowKey(item)));
                     return (
                       <div key={batchId} id={`batch-${batchId}`} className={`app-card overflow-hidden transition-all ${isExpanded ? 'bg-white' : 'bg-white/80 hover:bg-white'}`}>
                         <div 
                           onClick={() => {
                             const nextExpanded = !isExpanded;
                             setExpandedBatches((prev: Record<string, boolean>) => ({ ...prev, [batchId]: nextExpanded }));
-                            if (nextExpanded && !isReadOnlyViewer) clearBatchNotifications(batchId);
+                            if (nextExpanded) clearBatchNotifications(batchId);
                           }}
                           className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors cursor-pointer ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
                         >
-                          {/* เธเธฑเนเธเธเนเธฒเธข: เนเธญเธเธญเธเนเธฅเธฐเธเธทเนเธญเธเธดเธฅ */}
+                          {/* ฝั่งซ้าย: ไอคอนและชื่อบิล */}
                           <div className="flex items-center gap-6">
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative transition-all duration-300 ${
                               isExpanded ? 'bg-blue-600' : statusBgColor
@@ -926,7 +774,7 @@ const fetchStatus = async () => {
                             </div>
                           </div>
 
-                          {/* เธเธฑเนเธเธเธงเธฒ: เธเธธเนเธก Export เนเธฅเธฐ เธฅเธนเธเธจเธฃ (เธฃเธงเธกเธเธฅเธธเนเธกเธเธฑเธ) */}
+                          {/* ฝั่งขวา: ปุ่ม Export และลูกศร (รวมกลุ่มกัน) */}
                           <div className="flex items-center gap-4">
                             {canExportSorting && (
                             <button 
@@ -952,13 +800,13 @@ const fetchStatus = async () => {
                               <div className="relative flex justify-between items-center px-6">
                                 <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
                                 
-                                {/* เธเธธเธ”เธ—เธตเน 1: สร้างคำขอ */}
+                                {/* จุดที่ 1: สร้างคำขอ */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
                                   <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
                                 </div>
 
-                                {/* เธเธธเธ”เธ—เธตเน 2: สั่งซื้อแล้ว */}
+                                {/* จุดที่ 2: สั่งซื้อแล้ว */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep2Active ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -966,7 +814,7 @@ const fetchStatus = async () => {
                                   <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep2Active ? 'text-emerald-600' : 'text-slate-300'}`}>สั่งซื้อแล้ว</span>
                                 </div>
 
-                                {/* เธเธธเธ”เธ—เธตเน 3: กำลังส่ง */}
+                                {/* จุดที่ 3: กำลังส่ง */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep3Active ? 'bg-amber-500 text-white animate-pulse shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -974,7 +822,7 @@ const fetchStatus = async () => {
                                   <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep3Active ? 'text-amber-600' : 'text-slate-300'}`}>กำลังส่ง</span>
                                 </div>
 
-                                {/* เธเธธเธ”เธ—เธตเน 4: เรียบร้อย */}
+                                {/* จุดที่ 4: เรียบร้อย */}
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                   <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                                     isStep4Active ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
@@ -1000,7 +848,7 @@ const fetchStatus = async () => {
 
                               <div className="divide-y divide-slate-50">
                                 {batchItems.map((order: OrderItem, idx: number) => {
-                                  const itemKey = `${batchId}-${order.id}`;
+                                  const itemKey = notificationRowKey(order);
                                   const isItemUpdated = updatedItems.has(itemKey);
 
                                   return (
@@ -1065,7 +913,7 @@ const fetchStatus = async () => {
                                           </div>
                                         </div>
 
-                                        {/* แก้ไขเธชเนเธงเธ Status เนเธฅเธฐเน€เธเธดเนเธกเธเธธเนเธกจัดการ */}
+                                        {/* แก้ไขส่วน Status และเพิ่มปุ่มจัดการ */}
                                         <div className="flex flex-col gap-2 w-full md:w-32">
                                           <div className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
                                               order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -1079,7 +927,7 @@ const fetchStatus = async () => {
                                             order.status === 'ORDERED' ? '🚚 กำลังส่ง' : '⏳ รอจัดซื้อ'}
                                           </div>
                                           
-                                          {/* เธเธธเนเธกจัดการเธฃเธฒเธขเธเธฒเธฃ (เนเธชเธ”เธเน€เธเธเธฒเธฐเน€เธกเธทเนเธญเธขเธฑเธเนเธกเน COMPLETED) */}
+                                          {/* ปุ่มจัดการรายการ (แสดงเฉพาะเมื่อยังไม่ COMPLETED) */}
                                           {canManageSorting && order.status !== 'COMPLETED' && (
                                             <div className="flex gap-1">
                                               <button 
@@ -1124,7 +972,7 @@ const fetchStatus = async () => {
 
               <form onSubmit={handleUpdateItem} className="p-8 space-y-4">
                 <div className="grid grid-cols-3 gap-4">
-                  {/* เน€เธเธดเนเธกเธเนเธญเธเนเธเนเธฃเธซเธฑเธชเธชเธดเธเธเนเธฒ */}
+                  {/* เพิ่มช่องแก้ไขรหัสสินค้า */}
                   <div className="col-span-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">รหัสสินค้า (ID)</label>
                     <input 
@@ -1133,7 +981,7 @@ const fetchStatus = async () => {
                       onChange={(e) => setEditingItem({...editingItem, id: e.target.value})} 
                     />
                   </div>
-                  {/* เน€เธเธดเนเธกเธเนเธญเธเนเธเนเธเธฑเธเธเธฅเธฒเธขเน€เธญเธญเธฃเน */}
+                  {/* เพิ่มช่องแก้ไขบริษัทซัพพลายเออร์ */}
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ซัพพลายเออร์ (Supplier)</label>
                     <input 
@@ -1155,14 +1003,16 @@ const fetchStatus = async () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>`r`n                    <input type="number" 
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>
+                    <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.storeQty} 
                       onChange={(e) => setEditingItem({...editingItem, storeQty: e.target.value})} 
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>`r`n                    <input type="number" 
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">คลังสินค้า</label>
+                    <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.warehouseQty} 
                       onChange={(e) => setEditingItem({...editingItem, warehouseQty: e.target.value})} 
@@ -1227,10 +1077,10 @@ const fetchStatus = async () => {
         {/* Modal: New Batch (Style adjusted) */}
         {canManageSorting && isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-100 p-4">
-            {/* เธฅเนเธญเธเธเธงเธฒเธกเธชเธนเธเธชเธนเธเธชเธธเธ”เธ—เธตเน 90% เธเธญเธเธซเธเนเธฒเธเธญ */}
+            {/* ล็อกความสูงสูงสุดที่ 90% ของหน้าจอ */}
             <div className="bg-white rounded-[45px] shadow-2xl w-full max-w-5xl overflow-hidden max-h-[90vh] flex flex-col border-t-8 border-blue-600 animate-in fade-in zoom-in-95 duration-300">
               
-              {/* Header: เธ•เธดเธ”เธญเธขเธนเนเธเธฑเธเธ—เธตเน */}
+              {/* Header: ติดอยู่บนสุด */}
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
                 <div>
                   <h2 className="text-2xl font-black uppercase italic tracking-tighter">สร้าง <span className="text-blue-500 not-italic">บิลสั่งซื้อใหม่</span></h2>
@@ -1239,10 +1089,10 @@ const fetchStatus = async () => {
                 <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-rose-600 transition-colors text-xl">x</button>
               </div>
 
-              {/* Body: เนเธเนเธเธเนเธฒเธข-เธเธงเธฒ เนเธฅเธฐเน€เธฅเธทเนเธญเธเน€เธเธเธฒเธฐเธเนเธฒเธเนเธ */}
+              {/* Body: แบ่งซ้าย-ขวา และเลือกเฉพาะฝั่งใน */}
               <div className="flex flex-col md:flex-row overflow-hidden flex-1">
                 
-                {/* เธเธฑเนเธเธเนเธฒเธข: เธเธญเธฃเนเธกเธเธฃเธญเธเธเนเธญเธกเธนเธฅ (Scrollable) */}
+                {/* ฝั่งซ้าย: ฟอร์มกรอกข้อมูล (Scrollable) */}
                 <div className="flex-1 p-8 space-y-6 overflow-y-auto custom-scrollbar border-r border-slate-100">
                   <div className="bg-blue-50/50 p-6 rounded-[30px] border border-blue-100">
                     <label className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] block mb-2 ml-1">1. ชื่อรอบการสั่งซื้อ</label>
@@ -1263,11 +1113,11 @@ const fetchStatus = async () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">ในคลัง:</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">หน้าร้าน:</span>
                           <input type="number" className="w-full p-4 pl-16 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" value={formData.storeQty} onChange={(e) => setFormData({...formData, storeQty: e.target.value})} required />
                         </div>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">ในคลัง:</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">คลังสินค้า:</span>
                           <input type="number" className="w-full p-4 pl-16 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" value={formData.warehouseQty} onChange={(e) => setFormData({...formData, warehouseQty: e.target.value})} required />
                         </div>
                       </div>
@@ -1278,14 +1128,14 @@ const fetchStatus = async () => {
                   </div>
                 </div>
 
-                {/* เธเธฑเนเธเธเธงเธฒ: เธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเน€เธฅเธทเธญเธเนเธฅเนเธง (Fixed Section) */}
+                {/* ฝั่งขวา: รายการที่เลือกแล้ว (Fixed Section) */}
                 <div className="w-full md:w-95 bg-slate-50 p-8 flex flex-col shrink-0">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">รายการในบิล ({items.length})</p>
                     {items.length > 0 && <button onClick={() => setItems([])} className="text-[9px] font-black text-rose-500 uppercase hover:underline">ล้างทั้งหมด</button>}
                   </div>
                   
-                  {/* เธฃเธฒเธขเธเธฒเธฃเธชเธดเธเธเนเธฒเธ—เธตเนเน€เธฅเธทเนเธญเธเนเธ”เนเธ เธฒเธขเนเธเธเธทเนเธเธ—เธตเนเธ—เธตเนเน€เธซเธฅเธทเธญ */}
+                  {/* รายการสินค้าที่เลือกไว้ ภายในพื้นที่ที่เหลือ */}
                   <div className="flex-1 overflow-y-auto space-y-2 pr-2 mb-6 custom-scrollbar">
                     {items.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[30px] text-slate-300 p-6 text-center">
@@ -1305,7 +1155,7 @@ const fetchStatus = async () => {
                     )}
                   </div>
 
-                  {/* เธเธธเนเธกเธเธ”เธขเธทเธเธขเธฑเธ (เธ•เธดเธ”เธญเธขเธนเนเธเธฑเธเธเธญเธเธฅเนเธฒเธเธเธญเธ Modal) */}
+                  {/* ปุ่มกดยืนยัน (ติดอยู่กับด้านล่างของ Modal) */}
                   <button 
                     onClick={submitBatch} 
                     disabled={items.length === 0 || !batchName || isSubmitting}
@@ -1319,13 +1169,13 @@ const fetchStatus = async () => {
           </div>
 )}
 
-      {/* โ ๏ธ Duplicate Warning Modal */}
+      {/* ⚠️ Duplicate Warning Modal */}
       {canManageSorting && duplicateWarning.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-200 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
             <div className="text-center mb-8">
               <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
-                โ ๏ธ
+                ⚠️
               </div>
               <h3 className="text-2xl font-black text-slate-900 italic uppercase mb-2">ระวัง!</h3>
               <p className="text-amber-600 font-bold text-sm">สินค้านี้มีการสั่งอยู่แล้ว</p>
@@ -1340,14 +1190,15 @@ const fetchStatus = async () => {
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ชื่อสินค้า</p>
                 <p className="font-bold text-slate-700">{duplicateWarning.productName}</p>
               </div>
               
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>`r`n                <p className="font-bold text-slate-700 italic text-sm wrap-break-word">{duplicateWarning.existingOrder}</p>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">บิลที่สั่งค้างอยู่</p>
+                <p className="font-bold text-slate-700 italic text-sm wrap-break-word">{duplicateWarning.existingOrder}</p>
               </div>
             </div>
 
@@ -1374,9 +1225,3 @@ const fetchStatus = async () => {
     </div>
   );
 }
-
-
-
-
-
-

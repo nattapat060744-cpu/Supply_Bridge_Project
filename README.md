@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+> อัปเดต 21/10/2569: รับสินค้าทุกช่องทางบันทึกแบบ transaction แล้ว และ noti อ่านแล้วซิงก์ผ่าน Supabase ข้ามเครื่อง ดู `DEPLOY-VERCEL.md` สำหรับไฟล์พร้อมขึ้น Vercel รายละเอียดบางส่วนด้านล่างเป็นบันทึกรอบก่อนหน้า
 
-## Getting Started
+# Stock System — Supabase version
 
-First, run the development server:
+เว็บ Next.js เวอร์ชันนี้ใช้ฐานข้อมูลโปรเจกต์ `sampheng-stock-system` แทน Google Sheets ในทุก API: คำสั่งซื้อ จัดซื้อ รับสินค้า ประวัติ archive สมัครสมาชิก และคำขอเกี่ยวกับบัญชี
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## เริ่มใช้งานบนเครื่องนี้
+
+```powershell
+npm install
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3002
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด http://127.0.0.1:3002 และเข้าสู่ระบบด้วยบัญชีเดิม
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## การเชื่อมต่อ
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `.env.local` เก็บ SUPABASE_URL, SUPABASE_SECRET_KEY และ SESSION_SECRET เฉพาะบนเซิร์ฟเวอร์ ไม่ใส่คีย์ในตัวแปร NEXT_PUBLIC และไม่ส่งให้เบราว์เซอร์
+- `src/lib/database.ts` เป็น adapter สำหรับ API เดิม โดยเรียก `public.stock_bridge` ฝั่ง Supabase
+- ตารางธุรกิจยังอยู่ใน schema `migration_stock` ฟังก์ชัน bridge อนุญาตเฉพาะ service_role ไม่เปิดสิทธิ์ให้ anon/authenticated เรียกโดยตรง
+- API ของ Next.js ตรวจ session และสิทธิ์ตามฝ่ายเดิม การย้ายครั้งนี้ยังใช้ signed session ของเว็บเดิม ไม่ได้เปลี่ยนไปใช้ Supabase Auth
+- บัญชีเดิมใช้ PBKDF2-SHA256 210,000 รอบ พร้อม salt แยกแต่ละบัญชี เก็บค่าแฮชใน `app_credentials` ที่เปิด RLS ไม่มีนโยบายให้เบราว์เซอร์อ่าน ไม่เก็บรหัสผ่านเป็นข้อความ
+- มี username ซ้ำในข้อมูลเดิม จึงเก็บโปรไฟล์ครบ 14 แถวและตรวจคู่ชื่อผู้ใช้/รหัสผ่านตามเดิม การสมัครใหม่ไม่อนุญาตให้ใช้ชื่อซ้ำ
+- เลขแถวเดิมคงไว้เป็นรหัสอ้างอิงสำหรับไฟล์ import/export และใช้ UUID ถาวรประกอบ ไม่เลื่อนเลขเมื่อมีการลบ
+- บันทึกคำสั่งซื้อและข้อมูลรับสินค้าในธุรกรรมเดียว และตรวจ revision เพื่อปฏิเสธการบันทึกจากข้อมูลเก่า
+- การลบรายการเป็น soft delete; archive เป็นการติดธงและยังดูได้ในหน้าประวัติ
+- เก็บข้อความวันที่ต้นทางในคอลัมน์ *_raw ตามเดิม API แปลงวันที่รูปแบบปี พ.ศ. เป็น ISO สำหรับ UI โดยใช้เวลาธุรกิจ Asia/Bangkok เพื่อแก้การแสดงปี 3112
+- `extra` ใช้เก็บฟิลด์เพิ่มเติมที่มีในโค้ดแต่ไม่มีในไฟล์ส่งออก เช่น Group_Name, Image_URL และ Purchase_Qty
 
-## Learn More
+## โครงสร้างฐานข้อมูลที่ติดตั้งแล้ว
 
-To learn more about Next.js, take a look at the following resources:
+`supabase/001_web_bridge.sql` และ `002_date_parser.sql` ติดตั้งแล้วในโปรเจกต์ปัจจุบัน ไฟล์แรกมีคำสั่งสร้าง sequence/table จึงไม่ควรรันซ้ำทั้งไฟล์บนโปรเจกต์นี้
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## การทดสอบ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `supabase/verification-result.json`: ตรวจอ่านข้อมูลครบจำนวนและสิทธิ์ตามฝ่ายผ่าน HTTP/API จริง
+- `supabase/login-verification.json`: ผลตรวจบัญชีเดิม โดยไม่บันทึกรหัสผ่านหรือ cookie
+- `supabase/verify_transactions.sql`: ทดสอบสร้าง แก้ไข รับสินค้า กัน stale write และ soft delete แล้ว rollback ข้อมูลทดสอบทั้งหมด
+- ตรวจ TypeScript และ production build ด้วย `npm run build -- --webpack`
 
-## Deploy on Vercel
+การทดสอบอัตราจำกัด login ตอนนี้ใช้หน่วยความจำของแต่ละ server instance เหมือน session ของแอปที่ยังไม่มีระบบจัดการส่วนกลาง หากนำไปใช้หลาย instance ควรเพิ่ม rate limit ส่วนกลาง
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+สำเนาโค้ดนี้อยู่แยกจากเว็บเดิม ยังไม่ได้ deploy หรือเปลี่ยนฐานข้อมูลของเว็บที่เผยแพร่อยู่
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+เอกสารอ้างอิงสำหรับฟังก์ชันและสิทธิ์: https://supabase.com/docs/guides/database/functions
+
+## การแจ้งเตือนที่แก้ไข
+
+- Navbar ตรวจอัปเดตทุก 30 วินาทีในแท็บที่เปิดอยู่ และตรวจทันทีเมื่อกลับมาที่แท็บ ทำงานได้ทุกหน้าสำหรับฝ่ายที่อ่านข้อมูลธุรการคลังได้
+- เก็บรายการที่ยังไม่อ่านตาม username ในเบราว์เซอร์ พร้อม baseline แบบมีเวอร์ชัน ไม่แชร์กับบัญชีอื่น ไม่ล้างเมื่อเปลี่ยนหน้า/รีเฟรช และไม่ตัดเหลือ 5 บิล
+- หนึ่งแจ้งเตือนต่อบิล พร้อมจำนวนแถวที่เปลี่ยน โดยอ้างอิง UUID ของรายการ ไม่ใช้รหัสสินค้าเป็นตัวระบุแถว
+- อ่านแล้วไม่แจ้งซ้ำจนมีข้อมูลเปลี่ยนใหม่ รวมถึงจำนวนรับ หน่วย และหมายเหตุ การตอบกลับที่เก่ากว่าจะไม่ย้อน baseline
+- กดแจ้งเตือนแล้วล้างตัวกรอง เปิดหน้าที่มีบิลนั้น ขยายบิล และอ่านเมื่อบิลแสดงแล้ว ไม่มีการเด้งไปบิลอื่นหรือเลื่อนจอเองเพียงเพราะมีแจ้งเตือนใหม่
+- สถานะอ่านซิงก์ระหว่างแท็บบนเบราว์เซอร์เดียวกัน ยังไม่ได้ย้ายสถานะอ่านไปเก็บในฐานข้อมูลเพื่อซิงก์ข้ามเครื่อง
+- ชุด regression `node scripts/verify-notifications.mjs` ผ่าน 25 กรณี ตรวจด้วย TypeScript และ production build แล้ว
+- ทดสอบกับ UI และ Supabase จริงโดยแก้หมายเหตุชั่วคราวแล้วคืนค่าเดิม ตรวจการแจ้งเตือนจากหน้าจัดซื้อ การเปิดบิลหน้า 93 การคงสถานะหลังรีเฟรช และการอ่านข้ามแท็บแล้ว
+
+## การตรวจบั๊กและปรับความเร็ว
+
+- ติดตั้ง `003_paged_reads.sql`: หน้าประวัติแบ่งโหลดจากฐานข้อมูลจริง พร้อมค้นหา กรอง เรียงลำดับ และจำนวนทั้งหมด ไม่กรองเฉพาะข้อมูลหน้าปัจจุบัน
+- API ประวัติเปลี่ยนเป็น `{items,page,pageSize,total,totalPages,suppliers}` แก้ชื่อฟิลด์บิลและผู้รับให้ตรงกัน แสดงวันที่ไทยตาม Asia/Bangkok และแจ้งข้อผิดพลาดแทนการแสดงตารางว่างเงียบ ๆ
+- หน้าธุรการคลัง จัดซื้อ สต็อก และงาน export ใช้ bulk read ครั้งเดียวแทนการอ่านต่อกันทีละ 500 แถว พร้อม cache ระยะสั้นและ invalidate เมื่อเขียนสำเร็จ ป้องกันผลอ่านเก่าที่กลับมาทีหลังเขียนทับ cache ใหม่
+- noti ใช้ endpoint ตรวจเวอร์ชันแยก ถ้าข้อมูลไม่เปลี่ยนไม่ส่งรายละเอียดรายการกลับมา การเปลี่ยน signature จากแบบเดิมไม่สร้างแจ้งเตือนประวัติปลอม
+- แก้หน้าสต็อกไม่ให้แจ้งสำเร็จเมื่อ API ตอบผิดพลาดหรือบันทึกได้บางส่วน และคืน HTTP 409 พร้อมข้อความให้รีเฟรชเมื่อชนกับการแก้ไขของคนอื่น
+- แก้ preview archive ที่ค้างจากเกณฑ์วันก่อนหน้า และข้อความที่ยังอธิบายพฤติกรรมแบบ Sheets
+- ผลวัด API ใน dev server เครื่องนี้อยู่ที่ `supabase/performance-verification.json`: ประวัติหน้าถัดไปประมาณ 200–371 ms, รายละเอียดหน้าหลักครั้งแรกประมาณ 1.5–1.7 s, คำขอ noti ที่ไม่เปลี่ยน 59 bytes ตัวเลขนี้ไม่ใช่การรับประกันเวลาเปิดหน้าเต็มหรือเครือข่ายอื่น
+- ทดสอบ API 24 กรณี, noti 27 กรณี, pagination/filter บนเบราว์เซอร์จริง, cache race, วันที่ไทย, ผลบันทึก และ production build ผ่าน
+
+ขอบเขตการตรวจรอบนี้คือการโหลด อ่าน แสดงผล สิทธิ์ API และการรายงานผลบันทึก ไม่ได้เป็นการตรวจความปลอดภัยครบระบบหรือทดสอบโหลดหลายผู้ใช้ การอ่านสถานะ noti ยังอยู่ในเบราว์เซอร์ และการรับสินค้าแบบ bulk ยังเป็นการบันทึกแต่ละรายการตามลำดับ จึงอาจสำเร็จบางรายการก่อนรายการถัดไปผิดพลาด
+
+## สมัครสมาชิกใช้งานทันที
+
+ติดตั้ง `004_instant_registration.sql` แล้ว การสมัครสร้างโปรไฟล์ ค่าแฮช และประวัติในธุรกรรมเดียว ไม่ต้องอนุมัติ พร้อมสร้าง session และเปิดหน้าแผนกให้ทันที ชื่อผู้ใช้ซ้ำไม่สามารถสมัครได้ รวมถึงกรณีตัวพิมพ์ต่างกัน และไม่เปิดสมัครตำแหน่ง ADMIN หน้า `/admin/requests` เปลี่ยนเป็นรายชื่อสมาชิกสำหรับผู้ดูแล ส่วน PATCH อนุมัติเดิมตอบ 410 รหัสผ่านขั้นต่ำ 8 ตัวอักษร การทดสอบฐานข้อมูลสร้างบัญชีจริงภายใน transaction แล้ว rollback ทั้งหมด

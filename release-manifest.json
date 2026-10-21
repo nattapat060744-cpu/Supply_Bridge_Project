@@ -1,0 +1,366 @@
+{
+  "project": "aemori/spb_warehouse_administration",
+  "date": "2026-10-21",
+  "files": [
+    {
+      "path": ".env.example",
+      "sha256": "10c74ed490147bdf7f2d75eed18771d89d098c56d740496cfe495fafda206b18",
+      "bytes": 185
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "096cadadda299d0162f99468ecf0de3f050e3468d7feb1d2555a6793e768711d",
+      "bytes": 671
+    },
+    {
+      "path": ".vercel/project.json",
+      "sha256": "2d9a87a31fbd78f9431d42dd02ad5716abb525cf328d5d9c8ff8d622739dd6b0",
+      "bytes": 147
+    },
+    {
+      "path": ".vercelignore",
+      "sha256": "a68c709879b9a62bcf9cada42aa77c53758e24c736a72a60be8fd64f7e57693e",
+      "bytes": 134
+    },
+    {
+      "path": "DEPLOY-VERCEL.md",
+      "sha256": "a047266d17af694c54e1cff92717d7f9eeb6c99ef6097c8f4deb8f5a6c88502e",
+      "bytes": 6857
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha256": "275a07c13fc7c83a652efcfa9fb6a207c451a2f5088e6793415ce44281285720",
+      "bytes": 483
+    },
+    {
+      "path": "next.config.ts",
+      "sha256": "bb7d312afdc5aa60769e842a81e7f2a223c7de506cbb11822c0e8b916fa3ed02",
+      "bytes": 183
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "1ac9f7e9b79d9086e8ba8baa8da6847a779d038c02004b76080f6bd79a6bd4ae",
+      "bytes": 290212
+    },
+    {
+      "path": "package.json",
+      "sha256": "920128be45050a906fcdbcbc648cc2147f8e024f22b81961b5aa0b9dab97c5ad",
+      "bytes": 941
+    },
+    {
+      "path": "postcss.config.mjs",
+      "sha256": "7b299d3d3b16699ddda397c0b2373b3af4f25f8fc9ccc9b3d9e64ef083bc1c21",
+      "bytes": 101
+    },
+    {
+      "path": "public/file.svg",
+      "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+      "bytes": 391
+    },
+    {
+      "path": "public/globe.svg",
+      "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+      "bytes": 1035
+    },
+    {
+      "path": "public/next.svg",
+      "sha256": "55995dfad6ecb4945a1e856ddca03c5e16aa5bf13fd21b4df6a74ae79357bcfc",
+      "bytes": 1375
+    },
+    {
+      "path": "public/vercel.svg",
+      "sha256": "f081337b2fee635b455b63275406a3e7f39d6a014e25ad90dab5a67e62a12ac4",
+      "bytes": 128
+    },
+    {
+      "path": "public/window.svg",
+      "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+      "bytes": 385
+    },
+    {
+      "path": "READINESS.md",
+      "sha256": "1604ef170018ba8e78819cd16e85d0bdb1d15c826f0e654d0c24ac1a202e4776",
+      "bytes": 6214
+    },
+    {
+      "path": "README.md",
+      "sha256": "1d12916150ab1ac8b40bdd69c8bf20027abaa48b5ec290c11688221e63144f94",
+      "bytes": 14073
+    },
+    {
+      "path": "src/app/admin/requests/page.tsx",
+      "sha256": "6ed7787cb2e3d37478401f8f4271ceef76bfd98086a4b9449a110bf9dd57b119",
+      "bytes": 2552
+    },
+    {
+      "path": "src/app/api/archive/route.ts",
+      "sha256": "1fe487bfcc27c76554cda6d4f9bc5333b77b26e39cf260c726e2d67a61059724",
+      "bytes": 2851
+    },
+    {
+      "path": "src/app/api/auth/login/route.ts",
+      "sha256": "2cb54d914f13fa1f08deb0b973771e5037136f9aa220d011eb1aeea1d2d08ad0",
+      "bytes": 2291
+    },
+    {
+      "path": "src/app/api/auth/logout/route.ts",
+      "sha256": "23e157c8a47310956e8f36f296a955e5574e869c82ffe6e3414b6845c8de647f",
+      "bytes": 445
+    },
+    {
+      "path": "src/app/api/history/route.ts",
+      "sha256": "68cd0eeccdbcf4c73a38573cb5ee8764d8df01b5d8236c7ce9820c6f1f7a032b",
+      "bytes": 968
+    },
+    {
+      "path": "src/app/api/order/changes/route.ts",
+      "sha256": "5ddafac03cb929ed1e4d1269a7751c1ed0279abe8ceb97854bac59219f6709c0",
+      "bytes": 544
+    },
+    {
+      "path": "src/app/api/order/notifications/route.ts",
+      "sha256": "1c37048e24d4576ddef607505fd14c5b50eac953014d1ae9e291e28c82cc1e02",
+      "bytes": 1147
+    },
+    {
+      "path": "src/app/api/order/route.ts",
+      "sha256": "c38fdf392a6c68c9eadb2330329e6aaa2816fcb4783b673a101e428e0cbbe758",
+      "bytes": 6884
+    },
+    {
+      "path": "src/app/api/password-requests/public/route.ts",
+      "sha256": "890416986442ad2cac8c790c7ec268a26c87ee90f9b0f661d4e3984a304a6880",
+      "bytes": 3547
+    },
+    {
+      "path": "src/app/api/password-requests/route.ts",
+      "sha256": "b540d92d641938474bf5d1cd2f6999acf54bc1207eb01b87e2f7df6f5ca42e0c",
+      "bytes": 2956
+    },
+    {
+      "path": "src/app/api/purchase/route.ts",
+      "sha256": "6a54a38d32fac8f3cbba487e660181ed2bcb67c68873fb4b449477f6bfa09cfe",
+      "bytes": 12092
+    },
+    {
+      "path": "src/app/api/register/route.ts",
+      "sha256": "6b8406a9a8744a33de478765f32c16e4df4f3225fdef815f09b73676802222bb",
+      "bytes": 3126
+    },
+    {
+      "path": "src/app/api/stock/route.ts",
+      "sha256": "3b879296d6e47f8d9444e2122036a38d29affe7ec26df0202b9670209c2a639a",
+      "bytes": 4489
+    },
+    {
+      "path": "src/app/favicon.ico",
+      "sha256": "c0cc03b023407f51937e53729c65d59e3b35cd8f915fa98250f27ff4c6315e33",
+      "bytes": 412462
+    },
+    {
+      "path": "src/app/globals.css",
+      "sha256": "11d5c5ecf1f620afe7f27994c12b1763da2f9efc576d2b58b918995df86a3760",
+      "bytes": 5428
+    },
+    {
+      "path": "src/app/history/page.tsx",
+      "sha256": "bcd93150c42d12dd1f4718fe33f15bb3a4df5a4620fb6d2ce112a3bbc5422db7",
+      "bytes": 26819
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha256": "12e118568050d11b6e98f76896fb9c7efce4b9ad455b2904b19d0ae510761a1f",
+      "bytes": 1116
+    },
+    {
+      "path": "src/app/page.tsx",
+      "sha256": "593a10edb5ba8a4f578a662e114ac54f2dfdc2e957c1329262ea83ef2c6b3674",
+      "bytes": 19231
+    },
+    {
+      "path": "src/app/purchase/page.tsx",
+      "sha256": "f8b9762affd3998ddae8c80644d1bf3701d94bdca60857cecc82b98f0045af27",
+      "bytes": 71525
+    },
+    {
+      "path": "src/app/sorting/page.tsx",
+      "sha256": "d6b4e5fd4960ad5d8ed96ecdbd7271e8d9241fc00aaca0cdce66253fd0990f76",
+      "bytes": 72159
+    },
+    {
+      "path": "src/app/stock/page.tsx",
+      "sha256": "4bd05959dacf23fa39f9e6c5996f0bb235ca1f5fe2b644b367a37627c238d22d",
+      "bytes": 108853
+    },
+    {
+      "path": "src/components/IssueTracking.tsx",
+      "sha256": "edc69f422fcd6d8d69b7dbf644ee3119796ce127525ff5453831ca9379c0e2fe",
+      "bytes": 12018
+    },
+    {
+      "path": "src/components/MODERN_COMPONENTS.tsx",
+      "sha256": "3027683b581676f3d76b2f4340ca410914c93e56b416186173f5035e11b5813b",
+      "bytes": 15426
+    },
+    {
+      "path": "src/components/Navbar.tsx",
+      "sha256": "8fd35f2dcc69070d35f79fd70f3df05cb9c70dbd2f9e39af452d109b6e974d83",
+      "bytes": 13749
+    },
+    {
+      "path": "src/components/ui.tsx",
+      "sha256": "c477eb68ea2ec38e0fe678c4ca6c919bed880930518a9112f00b88490da3dff2",
+      "bytes": 1667
+    },
+    {
+      "path": "src/lib/access.ts",
+      "sha256": "a8e0978c64f7c0b3bc8ec14170da1c99829640673bf03f22d74fede15260ea2f",
+      "bytes": 320
+    },
+    {
+      "path": "src/lib/api-utils.ts",
+      "sha256": "bcb9c8de1e37345bdd21e92df8200b25f59e4bd99c2e0e531d9aa1c316200e79",
+      "bytes": 2970
+    },
+    {
+      "path": "src/lib/archive.ts",
+      "sha256": "e90b7c7b0c03ff8095312e12d90e74807434732ac8a754b653eca08746a68298",
+      "bytes": 5025
+    },
+    {
+      "path": "src/lib/auth.ts",
+      "sha256": "bf1fb3a535aa758069f8f5c2f378aef5fabff490181407b48ffd9d394d4debbd",
+      "bytes": 4765
+    },
+    {
+      "path": "src/lib/checked-fetch.ts",
+      "sha256": "5a1bb1d2f7f9b6f4738591cb9b5860abfa5682719da6331287a26da09e163a70",
+      "bytes": 537
+    },
+    {
+      "path": "src/lib/database.ts",
+      "sha256": "66a4f59c0201850362af2b37dbde7bb6f636fede89fb6a27da2e18a498578c2d",
+      "bytes": 5394
+    },
+    {
+      "path": "src/lib/dates.ts",
+      "sha256": "b45cd11667b64a3a411207a0402d19b32fd8b165f61cbbe3f04fa11e74546549",
+      "bytes": 1324
+    },
+    {
+      "path": "src/lib/password-requests.ts",
+      "sha256": "af11167a813d1094e6468f2868a36ebd94474e74d3d8898499944093efa513a4",
+      "bytes": 2955
+    },
+    {
+      "path": "src/lib/password.ts",
+      "sha256": "fa68bbf148f0c74865b28de6bf256f1abd054f4e6389c24b771bfaf2e79750c8",
+      "bytes": 2761
+    },
+    {
+      "path": "src/lib/save-receipts.ts",
+      "sha256": "72125d3459cfaebd25a78f11807ccb92a26e648f9a6864f24cf3b9ecc6752c20",
+      "bytes": 359
+    },
+    {
+      "path": "src/lib/shared-notifications.ts",
+      "sha256": "69290944a2163e94703b6264aa8cda8253622b7d8d6b75429760b5f66471468f",
+      "bytes": 1249
+    },
+    {
+      "path": "src/lib/sheet-cache.ts",
+      "sha256": "b62421010052db1ff288c2833a9c542b0b7ad9d706262bf01cbc718bae9e3025",
+      "bytes": 2792
+    },
+    {
+      "path": "src/lib/sorting-notifications.ts",
+      "sha256": "5c04271df686f68cf0ea74b5c7b3271a9ab91ef847fd5289ec8c0b491cfcffb7",
+      "bytes": 8170
+    },
+    {
+      "path": "src/lib/stock-import.ts",
+      "sha256": "86a8f746325968f31e35238e2c039061f5a91f00c38ec598820e919d8d077524",
+      "bytes": 880
+    },
+    {
+      "path": "src/lib/stock-receipts.ts",
+      "sha256": "68745641825582fb7c61a89069605e5eb90b7ebe1d91d6e2143325f47643ea0b",
+      "bytes": 1894
+    },
+    {
+      "path": "src/lib/use-sorting-notifications.ts",
+      "sha256": "443500461c89b54062919f084012debfeeba104f7c1d081965e0414068cf3e0b",
+      "bytes": 2944
+    },
+    {
+      "path": "src/middleware.ts.disabled",
+      "sha256": "19eaaaa95ac728b8aa63881983ca456ce83a059e19d08c27489c7e4e6587b7ca",
+      "bytes": 2721
+    },
+    {
+      "path": "src/proxy.ts",
+      "sha256": "2c0fd9617c21903e3f6df349c1df7f243e6fffec0dfb7f113dc0f454da27cdcf",
+      "bytes": 3037
+    },
+    {
+      "path": "supabase/001_web_bridge.sql",
+      "sha256": "263d31f59a7c2c54212645a21247b3a623dcfdff1e4ee11a1a68d3efbe432cf2",
+      "bytes": 17797
+    },
+    {
+      "path": "supabase/002_date_parser.sql",
+      "sha256": "35121ac2f4419ca4174f68606635c9c20bc7a6049f483810f369a1eae6c50cda",
+      "bytes": 852
+    },
+    {
+      "path": "supabase/003_paged_reads.sql",
+      "sha256": "14a86fb67e30f14bc1e35266d7c910cdaa7e0159dcf6846d305d9e7e8e96549c",
+      "bytes": 5961
+    },
+    {
+      "path": "supabase/004_instant_registration.sql",
+      "sha256": "657f11396718874bf567db1c16ae7d7c10b3e1625375f3370caa3740852223ff",
+      "bytes": 2188
+    },
+    {
+      "path": "supabase/005_atomic_purchase.sql",
+      "sha256": "e340c2ac163ff66393f73c6bc48f33e0741a787e8d49832c133b34564d4477c0",
+      "bytes": 792
+    },
+    {
+      "path": "supabase/006_shared_notifications.sql",
+      "sha256": "e0e388a8f01d2d964a7b0addcb54391494a18f8464ad919e11363c1537a7ccbc",
+      "bytes": 2319
+    },
+    {
+      "path": "supabase/verify_atomic.sql",
+      "sha256": "378815153f005bbfb7c0f330169201a061dea933a9c99c026cc3948fba62d7fe",
+      "bytes": 1850
+    },
+    {
+      "path": "supabase/verify_registration.sql",
+      "sha256": "f1b92bf472724a662469f9db63352b5b7f94657c1d35de8413dc348b0f4262fc",
+      "bytes": 1653
+    },
+    {
+      "path": "supabase/verify_release.sql",
+      "sha256": "649c68e1453fa5794943afe3719c25958c681061a0df7a7b8c2645b5cda07865",
+      "bytes": 3780
+    },
+    {
+      "path": "supabase/verify_transactions.sql",
+      "sha256": "73be96ab3a51f05012bae1dbc92b4a17fc391486263573de80b9c04365117a03",
+      "bytes": 2363
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "dbacf04aa5f38c1ce4b0f030fbb84e5adff19306fb785b2e4aafef9c58705658",
+      "bytes": 704
+    },
+    {
+      "path": "vercel.json",
+      "sha256": "9fd4ea9e9bbb01391e7e946e1b2d3e2af2dd003b27067dadcdcaf4f20b799fb1",
+      "bytes": 147
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
+import { StockDatabase, DatabaseRow, databaseRpc } from './database';
+
 
 export interface ArchiveCandidate {
   rowNumber: number;
@@ -21,22 +21,16 @@ export interface ArchiveResult {
   candidates: ArchiveCandidate[];
 }
 
-type SheetRow = Awaited<ReturnType<GoogleSpreadsheetWorksheet['getRows']>>[number];
+type SheetRow = DatabaseRow;
 
 const DEFAULT_ARCHIVE_DAYS = 180;
 const MAX_ARCHIVE_ROWS_PER_RUN = 500;
 const ORDERS_SHEET_TITLE = 'Orders';
 
-function getAuth() {
-  return new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-}
+
 
 export async function getOrdersDocument() {
-  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, getAuth());
+  const doc = new StockDatabase();
   await doc.loadInfo();
   return doc;
 }
@@ -48,7 +42,7 @@ function toNumber(value: unknown) {
 
 function parseSheetDate(value: string | undefined): Date | null {
   if (!value) return null;
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/^(2[4-9]\d{2})(?=-)/, y => String(Number(y)-543));
   if (!trimmed || trimmed === '-') return null;
 
   const datePart = trimmed.split(/[,\s]+/)[0];
@@ -80,48 +74,6 @@ function hasUnresolvedMismatch(row: SheetRow) {
   const receivedInner = toNumber(row.get('Recv_Qty'));
 
   return (orderedCarton !== receivedCarton || expectedInner !== receivedInner) && !isClosedIssue(row);
-}
-
-function rowToArchiveObject(row: SheetRow, headers: string[], archivedBy: string) {
-  const output: Record<string, string | number> = {};
-  headers.forEach((header) => {
-    if (!header) return;
-    if (header === 'Archived_At') {
-      output[header] = new Date().toLocaleString('th-TH');
-      return;
-    }
-    if (header === 'Archived_By') {
-      output[header] = archivedBy;
-      return;
-    }
-    output[header] = row.get(header) || '';
-  });
-  return output;
-}
-
-async function getOrCreateArchiveSheet(
-  doc: GoogleSpreadsheet,
-  title: string,
-  sourceHeaders: string[]
-) {
-  const existingSheet = doc.sheetsByTitle[title];
-  const headers = Array.from(new Set([...sourceHeaders, 'Archived_At', 'Archived_By'].filter(Boolean)));
-
-  if (existingSheet) {
-    if (!existingSheet.headerValues?.length) {
-      await existingSheet.setHeaderRow(headers);
-    }
-    return existingSheet;
-  }
-
-  return doc.addSheet({
-    title,
-    headerValues: headers,
-    gridProperties: {
-      rowCount: 1000,
-      columnCount: Math.max(headers.length, 1),
-    },
-  });
 }
 
 function getCandidates(rows: SheetRow[], cutoffDate: Date) {
@@ -197,26 +149,7 @@ export async function archiveCompletedOrders({
   }
 
   const selected = candidates.slice(0, MAX_ARCHIVE_ROWS_PER_RUN);
-  const sourceHeaders = ordersSheet.headerValues || [];
-
-  for (const [archiveSheetTitle] of Object.entries(archiveSheets)) {
-    const matchingRows = selected.filter((candidate) => candidate.archiveSheet === archiveSheetTitle);
-    if (matchingRows.length === 0) continue;
-
-    const archiveSheet = await getOrCreateArchiveSheet(doc, archiveSheetTitle, sourceHeaders);
-    const headers = archiveSheet.headerValues?.length
-      ? archiveSheet.headerValues
-      : Array.from(new Set([...sourceHeaders, 'Archived_At', 'Archived_By'].filter(Boolean)));
-
-    await archiveSheet.addRows(
-      matchingRows.map((candidate) => rowToArchiveObject(candidate.row, headers, archivedBy))
-    );
-  }
-
-  const rowsToDelete = [...selected].sort((a, b) => b.rowNumber - a.rowNumber);
-  for (const candidate of rowsToDelete) {
-    await candidate.row.delete();
-  }
+  await databaseRpc('archive', { archivedBy, items: selected.map(c => ({ id: c.row.id, revision: c.row.revision, archiveSheet: c.archiveSheet })) });
 
   return {
     mode: 'run',

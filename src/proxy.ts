@@ -1,11 +1,11 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth';
 
 // API access rules by department. ADMIN is allowed everywhere.
 // SORTING_VIEWER can read sorting/order data for export, but cannot write.
 const ROUTE_DEPARTMENTS: { prefix: string; allow: string[] }[] = [
   { prefix: '/api/order', allow: ['SORTING', 'STOCK_SORTING_MANAGER'] },
-  { prefix: '/api/purchase', allow: ['PURCHASE', 'SORTING', 'STOCK_SORTING_MANAGER'] },
+  { prefix: '/api/purchase', allow: ['PURCHASE', 'SORTING', 'STOCK', 'STOCK_SORTING_MANAGER'] },
   { prefix: '/api/stock', allow: ['STOCK', 'STOCK_SORTING_MANAGER'] },
   { prefix: '/api/history', allow: ['*'] },
   { prefix: '/api/archive', allow: ['ADMIN'] },
@@ -33,7 +33,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  const requestOrigin = `${req.nextUrl.protocol}//${req.headers.get('host') || req.nextUrl.host}`;
+  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.headers.get('origin')&&req.headers.get('origin')!==requestOrigin){
+    return NextResponse.json({success:false,message:'ไม่อนุญาตคำขอจากเว็บไซต์อื่น'},{status:403});
+  }
+  if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 
@@ -49,7 +53,7 @@ export async function proxy(req: NextRequest) {
 
   const rule = ROUTE_DEPARTMENTS.find((r) => pathname.startsWith(r.prefix));
 
-  if (pathname.startsWith('/api/order') && req.method === 'GET' && session.department === 'SORTING_VIEWER') {
+  if (pathname.startsWith('/api/order') && (req.method === 'GET' || (pathname === '/api/order/notifications' && req.method === 'POST')) && session.department === 'SORTING_VIEWER') {
     return withSessionHeaders(req, session.username, session.department);
   }
 

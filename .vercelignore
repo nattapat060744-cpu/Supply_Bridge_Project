@@ -1,0 +1,15 @@
+.env*
+!.env.example
+.private
+.git
+.agents
+.codex
+.next
+node_modules
+*.tsbuildinfo
+*.zip
+*.png
+scripts
+supabase
+READINESS.md
+AGENTS.md

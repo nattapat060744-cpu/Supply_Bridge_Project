@@ -163,11 +163,14 @@ export default function HomeImproved() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setRegisterMessage(data.message || 'ส่งคำขอสมัครไม่สำเร็จ');
+        setRegisterMessage(data.message || 'สมัครสมาชิกไม่สำเร็จ');
         return;
       }
 
-      setRegisterMessage(data.message || 'ส่งคำขอสมัครเรียบร้อย รอ admin อนุมัติ');
+      localStorage.setItem('user',JSON.stringify(data.user));
+      localStorage.setItem('loginDate',data.user.loginDate);
+      const target=data.user.department==='PURCHASE'?'/purchase':data.user.department==='STOCK'?'/stock':'/sorting';
+      router.push(target);
       setRegisterForm({ name: '', username: '', password: '', department: 'SORTING' });
     } catch {
       setRegisterMessage('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ ลองใหม่อีกครั้งครับ');
@@ -318,7 +321,7 @@ export default function HomeImproved() {
             <div className="mb-7 text-center">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Access Request</p>
               <h3 className="mt-2 font-display text-2xl font-semibold text-[var(--ink)]">สมัครเข้าใช้งาน</h3>
-              <p className="mt-2 text-sm text-[var(--muted)]">ส่งคำขอให้ admin ตรวจสอบและอนุมัติก่อนเข้าใช้งาน</p>
+              <p className="mt-2 text-sm text-[var(--muted)]">สมัครแล้วเข้าสู่ระบบใช้งานได้ทันที</p>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
@@ -352,14 +355,15 @@ export default function HomeImproved() {
                     className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
                     value={registerForm.password}
                     onChange={(e) => setRegisterForm((current) => ({ ...current, password: e.target.value }))}
-                    placeholder="อย่างน้อย 4 ตัว"
+                    placeholder="อย่างน้อย 8 ตัวอักษร"
+                    minLength={8}
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">ขอสิทธิ์แผนก</label>
+                <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">แผนกที่ใช้งาน</label>
                 <select
                   className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
                   value={registerForm.department}
@@ -378,7 +382,7 @@ export default function HomeImproved() {
                 disabled={registerLoading}
                 className={`w-full py-3.5 rounded-xl font-semibold text-sm tracking-wide transition-all active:scale-[0.98] ${registerLoading ? 'bg-[var(--line)] text-[var(--muted)] cursor-not-allowed' : 'bg-[var(--brand)] text-white hover:opacity-90 shadow-lg shadow-[var(--brand)]/15'}`}
               >
-                {registerLoading ? 'กำลังส่งคำขอ...' : 'ส่งคำขอสมัคร'}
+                {registerLoading ? 'กำลังสมัคร...' : 'สมัครและเริ่มใช้งาน'}
               </button>
             </form>
           </div>

@@ -19,6 +19,7 @@ const DEFAULT_TTL_MS = 4000;
 
 export async function getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttlMs = DEFAULT_TTL_MS): Promise<T> {
   const now = Date.now();
+  for(const [oldKey,old] of store)if(oldKey!==key&&!old.inFlight&&old.expiresAt<=now)store.delete(oldKey);
   const entry = store.get(key) as CacheEntry<T> | undefined;
 
   if (entry) {
@@ -36,10 +37,10 @@ export async function getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttlM
 
   try {
     const value = await promise;
-    store.set(key, { value, expiresAt: Date.now() + ttlMs });
+    if(store.get(key)?.inFlight===promise)store.set(key, { value, expiresAt: Date.now() + ttlMs });
     return value;
   } catch (err) {
-    store.delete(key); // ถ้า fetch พลาด ไม่ cache ของเก่าที่ผิด ให้ลองใหม่ครั้งหน้า
+    if(store.get(key)?.inFlight===promise)store.delete(key);
     throw err;
   }
 }
@@ -48,3 +49,4 @@ export async function getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttlM
 export function invalidateCache(key: string) {
   store.delete(key);
 }
+export function invalidateCachePrefix(prefix:string){for(const key of store.keys())if(key.startsWith(prefix))store.delete(key);}

@@ -1,9 +1,10 @@
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
+import { StockDatabase, saveDatabaseRows } from '@/lib/database';
+import {prepareReceiptRows} from '@/lib/stock-receipts';
 import { NextResponse } from 'next/server';
-import { toSafeNonNegativeNumber, toSafeString, safeErrorResponse } from '@/lib/api-utils';
+import { safeErrorResponse } from '@/lib/api-utils';
 import { getOrFetch, invalidateCache } from '@/lib/sheet-cache';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
+export const maxDuration=60;
 
 function getCookieValue(cookieHeader: string | null, name: string) {
   if (!cookieHeader) return null;
@@ -27,12 +28,7 @@ async function requireStockWriteAccess(req: Request) {
 }
 
 const getSheet = async () => {
-  const auth = new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, auth);
+const doc = new StockDatabase();
   await doc.loadInfo();
   return doc.sheetsByTitle['Orders'];
 };
@@ -50,7 +46,7 @@ export async function GET() {
         return status === 'ORDERED' || status === 'COMPLETED';
       })
       .map(r => ({
-        rowId: r.rowNumber,
+        rowId: r.rowNumber, revision:r.revision,
         rowUid: r.get('Row_UID') || '', // ✅ ID ถาวร ไม่เลื่อนตามตำแหน่งแถว
         groupId: r.get('Group_ID'),
         productID: r.get('Product_ID'),
@@ -78,138 +74,18 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req: Request) {
-  try {
-    const forbidden = await requireStockWriteAccess(req);
-    if (forbidden) return forbidden;
-
-    const body = await req.json();
-
-    if (body.rowId === undefined || body.rowId === null) {
-      return NextResponse.json({ success: false, message: 'ไม่พบ rowId ที่ต้องการอัปเดต' }, { status: 400 });
-    }
-
-    const sheet = await getSheet();
-    const rows = await sheet.getRows();
-    
-    // 1. ค้นหาแถวด้วย Row_UID ก่อน (ถ้ามี) เพราะไม่เลื่อนตามตำแหน่งแถว ไม่งั้น fallback ไป rowNumber
-    const row = (body.rowUid && rows.find(r => r.get('Row_UID') === body.rowUid))
-      || rows.find(r => r.rowNumber === Number(body.rowId));
-
-    if (row) {
-      // 🛡️ ถ้า frontend ส่ง productID มาด้วย ให้เช็คว่าตรงกับแถวที่เจอจริงไหม
-      // กันบัค rowNumber เลื่อนเพราะมีคนลบแถวอื่นไปก่อนหน้า (ข้อมูล cache เก่าฝั่ง client)
-      if (body.productID && row.get('Product_ID') !== body.productID) {
-        return NextResponse.json({
-          success: false,
-          message: `ข้อมูลแถวที่ ${body.rowId} ไม่ตรงกับสินค้าที่เลือก (อาจมีการเปลี่ยนแปลงแถวจากการลบ/แก้ไขรายการอื่น) กรุณารีเฟรชหน้าจอแล้วลองใหม่ครับ`,
-        }, { status: 409 });
-      }
-
-      // เช็คสถานะปัจจุบัน (ยกเว้นกรณีสั่ง Force Complete ซ้ำเพื่อแก้ไข Note)
-      const currentStatus = row.get('Status')?.toString().trim().toUpperCase() || '';
-      if (currentStatus === 'COMPLETED' && body.status?.toUpperCase() !== 'COMPLETED') {
-        return NextResponse.json({ 
-          success: false, 
-          message: `รายการแถวที่ ${body.rowId} นี้ถูกบันทึกไปแล้ว ไม่สามารถ Import ซ้ำได้ครับพี่ชาย` 
-        }, { status: 400 });
-      }
-
-      // 2. อัปเดตข้อมูลที่ส่งมาจากหน้าบ้าน
-      if (body.receiver !== undefined) row.set('Receiver_Name', toSafeString(body.receiver));
-      if (body.recvCarton !== undefined) row.set('Recv_Carton', toSafeNonNegativeNumber(body.recvCarton));
-      if (body.Recv_Qty !== undefined) row.set('Recv_Qty', toSafeNonNegativeNumber(body.Recv_Qty));
-      
-      // 🔥 บันทึก Note_Stock ให้แม่นยำ
-      if (body.Note_Stock !== undefined) row.set('Note_Stock', toSafeString(body.Note_Stock));
-      
-      // 3. เปลี่ยนสถานะและหน่วย
-      row.set('Status', 'COMPLETED');
-      row.set('Recv_Unit', row.get('Carton_Unit') || '');
-      row.set('Recv_Qty_Unit', row.get('Inner_Unit') || '');
-      row.set('Recv_Date', toSafeString(body.Recv_Date) || new Date().toLocaleString('th-TH')); 
-
-      // 4. บันทึกเลขที่บิล (Invoice_No) โดยใช้ row.set ตรงๆ เพื่อความชัวร์
-      if (body.invoiceNo !== undefined) {
-        row.set('Invoice_No', toSafeString(body.invoiceNo));
-      }
-
-      // เซฟข้อมูลลง Google Sheets
-      await row.save();
-      invalidateCache('stock:list');
-      invalidateCache('purchase:list');
-      invalidateCache('history:list');
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
-
-    return NextResponse.json({ success: false, message: 'ไม่พบรายการที่ต้องการอัปเดต (อาจถูกลบหรือข้อมูลเปลี่ยนไปแล้ว กรุณารีเฟรชหน้าจอ)' }, { status: 404 });
-  } catch (error: unknown) {
-    return safeErrorResponse(error, 'stock.PATCH');
-  }
+async function saveReceipt(req:Request,allowCompleted:boolean){
+ try{
+  const forbidden=await requireStockWriteAccess(req);if(forbidden)return forbidden;
+  const body=await req.json();
+  const items=body.items===undefined?[body]:body.items;
+  if(!Array.isArray(items)||!items.length||items.length>5000||!items.every(item=>item&&typeof item==='object'&&!Array.isArray(item)))return NextResponse.json({success:false,message:'รายการรับสินค้าต้องมี 1–5000 รายการ'},{status:400});
+  const sheet=await getSheet();
+  const updates=prepareReceiptRows(await sheet.getRows(),items,allowCompleted && body.items===undefined);
+  await saveDatabaseRows(updates);
+  for(const key of ['stock:list','purchase:list','history:list'])invalidateCache(key);
+  return NextResponse.json({success:true,count:updates.length});
+ }catch(error){return safeErrorResponse(error,'stock.save');}
 }
-
-export async function POST(req: Request) {
-  try {
-    const forbidden = await requireStockWriteAccess(req);
-    if (forbidden) return forbidden;
-
-    const body = await req.json();
-
-    if (body.rowId === undefined || body.rowId === null) {
-      return NextResponse.json({ success: false, message: 'ไม่พบ rowId ที่ต้องการอัปเดต' }, { status: 400 });
-    }
-
-    const sheet = await getSheet();
-    const rows = await sheet.getRows();
-    
-    // ค้นหาแถวด้วย Row_UID ก่อน (ถ้ามี) ไม่งั้น fallback ไป rowId
-    const row = (body.rowUid && rows.find(r => r.get('Row_UID') === body.rowUid))
-      || rows.find(r => r.rowNumber === Number(body.rowId));
-
-    if (row) {
-      // 🛡️ เช็คเดียวกันกับ PATCH กันบัค rowNumber เลื่อน
-      if (body.productID && row.get('Product_ID') !== body.productID) {
-        return NextResponse.json({
-          success: false,
-          message: `ข้อมูลแถวที่ ${body.rowId} ไม่ตรงกับสินค้าที่เลือก กรุณารีเฟรชหน้าจอแล้วลองใหม่ครับ`,
-        }, { status: 409 });
-      }
-
-      const currentStatus = row.get('Status')?.toString().trim().toUpperCase();
-      if (currentStatus === 'COMPLETED') {
-        return NextResponse.json({ 
-          success: false, 
-          message: `รายการแถวที่ ${body.rowId} นี้ถูกบันทึกไปแล้วครับพี่ชาย` 
-        }, { status: 400 });
-      }
-
-      // ✅ แก้ไขจุดนี้: รองรับทั้งคีย์ receiver (แบบใหม่) และ receiverName (แบบเดิม)
-      const finalReceiver = body.receiver !== undefined ? body.receiver : body.receiverName;
-      if (finalReceiver !== undefined) row.set('Receiver_Name', toSafeString(finalReceiver));
-      
-      if (body.recvCarton !== undefined) row.set('Recv_Carton', toSafeNonNegativeNumber(body.recvCarton));
-      if (body.Recv_Qty !== undefined) row.set('Recv_Qty', toSafeNonNegativeNumber(body.Recv_Qty));
-      if (body.Note_Stock !== undefined) row.set('Note_Stock', toSafeString(body.Note_Stock));
-      
-      // เปลี่ยนสถานะและบันทึกหน่วยตามเงื่อนไขของสต็อก
-      row.set('Status', 'COMPLETED');
-      row.set('Recv_Unit', row.get('Carton_Unit') || '');
-      row.set('Recv_Qty_Unit', row.get('Inner_Unit') || '');
-      row.set('Recv_Date', toSafeString(body.Recv_Date) || new Date().toLocaleString('th-TH')); 
-
-      if (body.invoiceNo !== undefined) {
-        row.set('Invoice_No', toSafeString(body.invoiceNo));
-      }
-
-      await row.save();
-      invalidateCache('stock:list');
-      invalidateCache('purchase:list');
-      invalidateCache('history:list');
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
-
-    return NextResponse.json({ success: false, message: 'ไม่พบรายการที่ต้องการอัปเดต (อาจถูกลบหรือข้อมูลเปลี่ยนไปแล้ว กรุณารีเฟรชหน้าจอ)' }, { status: 404 });
-  } catch (error: unknown) {
-    return safeErrorResponse(error, 'stock.POST');
-  }
-}
+export async function PATCH(req:Request){return saveReceipt(req,true);}
+export async function POST(req:Request){return saveReceipt(req,false);}
