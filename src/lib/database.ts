@@ -6,7 +6,7 @@ export type RowData = Record<string, Cell>;
 type StoredRow = { id: string; rowNumber: number; revision: number; signature?:string; data: RowData };
 class DatabaseRequestError extends Error { constructor(message:string,public code:string){super(message);} }
 
-export async function supabaseFunction<T>(name: 'stock_bridge'|'stock_history'|'stock_orders'|'stock_order_changes'|'stock_register'|'stock_save_orders'|'stock_notifications', args: unknown): Promise<T> {
+export async function supabaseFunction<T>(name: 'stock_bridge'|'stock_history'|'stock_orders'|'stock_order_changes'|'stock_register'|'stock_save_orders'|'stock_notifications'|'stock_sorting_page', args: unknown): Promise<T> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error('Missing Supabase server configuration');

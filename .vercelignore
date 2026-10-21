@@ -13,3 +13,5 @@ scripts
 supabase
 READINESS.md
 AGENTS.md
+
+google-credentials.json

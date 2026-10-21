@@ -3,8 +3,6 @@ import { parseBusinessDate } from '@/lib/dates';
 import { acknowledgeSortingBatch,currentNotificationUser,NOTIFICATION_EVENT,notificationRowKey,pendingNotificationKey,readNotificationState } from '@/lib/sorting-notifications';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 import IssueTracking from '@/components/IssueTracking';
 
 interface OrderItem {
@@ -76,6 +74,7 @@ const parseThaiDate = parseBusinessDate;
     const batchItems = activeBatches[batchId];
     if (!batchItems || batchItems.length === 0) return;
 
+    const [{default:ExcelJS},{saveAs}]=await Promise.all([import('exceljs'),import('file-saver')]);
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
 
@@ -187,12 +186,19 @@ export default function SortingPage() {
   const canExportSorting = canManageSorting || currentDepartment === 'SORTING_VIEWER';
 
   const [pendingScrollBatch,setPendingScrollBatch] = useState<string | null>(null);
-  const fetchInFlight = useRef(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const [totalBatches,setTotalBatches]=useState(0);
+  const [totalPages,setTotalPages]=useState(1);
+  const [pageBatchIds,setPageBatchIds]=useState<string[]>([]);
+  const [locateBatch,setLocateBatch]=useState('');
+  const [loadError,setLoadError]=useState('');
+  const pageParams=useRef({page:1,q:'',locateBatch:''});
+  pageParams.current={page:currentPage,q:searchTerm,locateBatch};
+  const pageRequest=useRef<AbortController|null>(null);
+  const pageSequence=useRef(0);
 
 
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
@@ -221,66 +227,14 @@ export default function SortingPage() {
   });
   const [tempFormData, setTempFormData] = useState<OrderItem | null>(null);
 
-const allFilteredBatchIds = useMemo(() => {
-  const now = new Date().getTime();
-  const oneDayInMs = 24 * 60 * 60 * 1000;
-
-  const filtered = Object.keys(activeBatches).filter(batchId => {
-    const batchItems = activeBatches[batchId];
-    if (!batchItems || batchItems.length === 0) return false;
-
-    /*const allDone = batchItems.every(i => i.status === 'COMPLETED');
-    if (allDone) {
-      const itemDate = batchItems[0]?.createdAt;
-      const lastUpdate = parseThaiDate(itemDate || "").getTime();
-      if (now - lastUpdate > oneDayInMs) return false;
-    }*/
-
-    if (!searchTerm.trim()) return true;
-    const s = searchTerm.toLowerCase();
-    const matchBatchName = batchItems[0]?.batchName?.toLowerCase().includes(s);
-    const matchItems = batchItems.some(item => 
-      item.id?.toLowerCase().includes(s) || 
-      item.name?.toLowerCase().includes(s) || 
-      item.supplier?.toLowerCase().includes(s)
-    );
-    return matchBatchName || matchItems;
-  });
-
-  return filtered.sort((a, b) => {
-    const timeA = parseThaiDate(activeBatches[a][0]?.createdAt || "").getTime();
-    const timeB = parseThaiDate(activeBatches[b][0]?.createdAt || "").getTime();
-    return timeB - timeA; 
-  });
-
-}, [activeBatches, searchTerm]);
-
-  const stats = useMemo(() => {
-      const total = allFilteredBatchIds.length; 
-      const ordered = allFilteredBatchIds.filter(bid => {
-        const batchItems = activeBatches[bid];
-        const hasOrdered = batchItems.some(i => i.status === 'ORDERED' || i.orderCarton);
-        const isAllDone = batchItems.every(i => i.status === 'COMPLETED');
-        return hasOrdered && !isAllDone;
-      }).length;
-      const completed = allFilteredBatchIds.filter(bid => 
-        activeBatches[bid].every(i => i.status === 'COMPLETED')
-      ).length;
-
-      return { total, ordered, completed };
-    }, [allFilteredBatchIds, activeBatches]);
+const stats={total:totalBatches};
 const clearBatchNotifications = (batchId: string) => {
     acknowledgeSortingBatch(currentNotificationUser(),batchId,activeBatches[batchId]||[]);
   };
-  const handleAcknowledge = useCallback((batchId: string) => {
-    const ids=Object.keys(activeBatches).sort((a,b)=>parseThaiDate(activeBatches[b][0]?.createdAt||'').getTime()-parseThaiDate(activeBatches[a][0]?.createdAt||'').getTime());
-    const batchIndex=ids.indexOf(batchId);
-    if(batchIndex<0)return;
-    setSearchTerm('');
-    setCurrentPage(Math.floor(batchIndex/itemsPerPage)+1);
-    setExpandedBatches(prev=>({...prev,[batchId]:true}));
-    setPendingScrollBatch(batchId);
-  },[activeBatches]);
+  const handleAcknowledge=useCallback((batchId:string)=>{
+    setSearchTerm('');setLocateBatch(batchId);
+    setExpandedBatches(prev=>({...prev,[batchId]:true}));setPendingScrollBatch(batchId);
+  },[]);
   useEffect(()=>{
     const sync=()=>{
       const state=readNotificationState(currentNotificationUser());
@@ -299,7 +253,7 @@ const clearBatchNotifications = (batchId: string) => {
       const requested=(event as CustomEvent<{batchId?:string}>)?.detail?.batchId||queued;
       // Never open an unrelated bill when a requested notification was already read.
       const target=requested||notifications[0]?.batchId;
-      if(target&&activeBatches[target]){
+      if(target){
         try{sessionStorage.removeItem(key);}catch{/* No persistent queue available. */}
         handleAcknowledge(target);
       }
@@ -311,13 +265,21 @@ const clearBatchNotifications = (batchId: string) => {
   },[notifications,activeBatches,handleAcknowledge]);
 
 const fetchStatus = async () => {
-    if(fetchInFlight.current)return;
-    fetchInFlight.current=true;
+    pageRequest.current?.abort();
+    const controller=new AbortController();pageRequest.current=controller;
+    const sequence=++pageSequence.current;
+    setLoading(true);setLoadError('');
     try {
-      const res = await fetch('/api/order'); 
-      if (!res.ok) return;
-      
-      const rawData = await res.json();
+      const params=pageParams.current;
+      const query=new URLSearchParams({page:String(params.page),q:params.q,...(params.locateBatch?{locateBatch:params.locateBatch}:{})});
+      const res=await fetch('/api/order/page?'+query,{signal:controller.signal});
+      if(!res.ok)throw new Error('โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่');
+      const result=await res.json();
+      if(sequence!==pageSequence.current)return;
+      const rawData=result.items;
+      setTotalBatches(result.total);setTotalPages(result.totalPages);setPageBatchIds(result.batchIds);
+      if(result.page!==params.page)setCurrentPage(result.page);
+      if(params.locateBatch)setLocateBatch('');
 
       const sortedData = Array.isArray(rawData) 
         ? [...rawData].sort((a: OrderItem, b: OrderItem) => {
@@ -364,14 +326,11 @@ const fetchStatus = async () => {
       setActiveBatches(grouped);
       
     } catch (err) {
-      console.error("Fetch status error:", err);
-    } finally { fetchInFlight.current=false;setLoading(false); }
+      if(sequence===pageSequence.current && !controller.signal.aborted)setLoadError(err instanceof Error?err.message:'โหลดข้อมูลไม่สำเร็จ');
+    } finally {if(sequence===pageSequence.current)setLoading(false);}
   };
 
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentBatchIds = allFilteredBatchIds.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(allFilteredBatchIds.length / itemsPerPage);
+  const currentBatchIds=pageBatchIds;
 
   const groupedByDate = useMemo(() => {
       const groups: { [key: string]: { batchId: string, items: OrderItem[] }[] } = {};
@@ -383,7 +342,7 @@ const fetchStatus = async () => {
         const dateVal = items[0]?.createdAt || items[0]?.Recv_Date || "";
         const d = parseThaiDate(dateVal);
 
-        if (isNaN(d.getTime())) return;
+        if (isNaN(d.getTime())) {const key='ไม่ระบุวันที่';(groups[key]??=[]).push({batchId,items});return;}
 
         const dateKey = d.toLocaleDateString('th-TH', {
           year: 'numeric',
@@ -431,7 +390,7 @@ const fetchStatus = async () => {
         }
         setCurrentDepartment(savedUser.department);
 
-        await fetchStatus(); 
+        // Page data loads after the account is validated. 
       } catch (e) {
         console.error("Auth Error:", e);
         router.push('/');
@@ -441,6 +400,12 @@ const fetchStatus = async () => {
     checkAuthAndFetch();
   }, [router]);
 
+  useEffect(()=>{
+    pageRequest.current?.abort();++pageSequence.current;
+    if(!currentDepartment)return;
+    const timer=setTimeout(()=>void fetchStatus(),searchTerm?250:0);
+    return()=>{clearTimeout(timer);pageRequest.current?.abort();};
+  },[currentPage,searchTerm,locateBatch,currentDepartment]);
   useEffect(() => {
       const interval = setInterval(() => {
         // ✅ ไม่ poll ถ้าแท็บนี้ถูกซ่อนอยู่ กัน request ที่ไม่จำเป็น
@@ -465,8 +430,9 @@ const fetchStatus = async () => {
 
   const checkDuplicateOrder = async (product: OrderItem) => {
     try {
-      const res = await fetch('/api/order');
-      const orders = await res.json();
+      const res = await fetch('/api/order/page?'+new URLSearchParams({productId:product.id}));
+      if(!res.ok)throw new Error('ตรวจสอบรายการซ้ำไม่ได้');
+      const orders = (await res.json()).items;
       
       // หา order ที่ Product_ID ตรงกัน และยังไม่ได้รับ (Recv_Date ว่าง)
       // และ Status ไม่ใช่ COMPLETED หรือ REJECTED
@@ -559,7 +525,7 @@ const fetchStatus = async () => {
           alert('ส่งบิลเรียบร้อยแล้วครับ!');
           setItems([]);
           setBatchName('');
-          setIsModalOpen(false);
+          setIsModalOpen(false);setCurrentPage(1);
           if (typeof fetchStatus === 'function') fetchStatus();
         } else {
           alert('เกิดข้อผิดพลาดในการส่งข้อมูลครับ');
@@ -686,6 +652,7 @@ const fetchStatus = async () => {
             <div className="h-px flex-1 bg-slate-100"></div>
           </div>
           
+          {loadError && <p role="alert" className="p-4 text-red-700">{loadError}</p>}
           {loading && Object.keys(activeBatches).length === 0 ? (
             <div className="text-center py-20 font-black text-slate-300 uppercase tracking-widest text-xs">กำลังโหลดข้อมูลสถานะสด...</div>
           ) : currentBatchIds.length === 0 ? (
