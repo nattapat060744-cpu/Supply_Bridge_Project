@@ -1,0 +1,23 @@
+const fs=require('node:fs');const vm=require('node:vm');const assert=require('node:assert/strict');
+const root=process.env.STOCK_PROJECT_ROOT||require('node:path').resolve(__dirname,'..');const ts=require(root+'/node_modules/typescript');
+function load(file,mocks={},extra={}){const code=ts.transpileModule(fs.readFileSync(root+'/'+file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;const exports={};vm.runInNewContext('(function(require,exports){'+code+'})',{console,Error,setTimeout,clearTimeout,Promise,AbortController,AbortSignal,...extra})(name=>{if(name==='server-only')return {};if(name in mocks)return mocks[name];throw Error('Unexpected import '+name);},exports);return exports;}
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ const cache=load('src/lib/sheet-cache.ts');const pure=load('src/lib/sorting-notifications.ts');let calls=0;let conflicts=false;let saves=0;
+ const state={version:2,initialized:false,observedAt:0,baseline:{},notices:[]};
+ const server=load('src/lib/shared-notifications.ts',{'./sheet-cache':cache,'./sorting-notifications':pure,'./database':{supabaseFunction:async(name,args)=>{calls++;await delay(5);if(args.payload.op==='save'){saves++;if(conflicts)throw Object.assign(new Error('Conflict'),{code:'40001'});return {success:true};}return {state,revision:0,observedAt:1,changes:{version:'epoch:1',items:conflicts?[]:null}};}}});
+ await Promise.all(Array.from({length:12},()=>server.syncNotifications('same-user')));assert.equal(calls,1,'Concurrent polls must merge');
+ await server.syncNotifications('same-user');assert.equal(calls,1,'Brief cache must suppress repeated polls');
+ await server.syncNotifications('other-user');assert.equal(calls,2,'Users must be isolated');
+ await server.syncNotifications('same-user',{batchId:'bill',rows:[]});assert.equal(calls,3,'Acknowledgement must bypass cache');
+ await server.syncNotifications('same-user');assert.equal(calls,4,'Acknowledgement must invalidate cached reads');
+ conflicts=true;const before=calls;const started=Date.now();await assert.rejects(()=>server.syncNotifications('conflicts'));assert.equal(saves,3);assert.equal(calls-before,6);assert.ok(Date.now()-started>=240,'Retries need backoff');
+ const db=load('src/lib/database.ts',{'./sheet-cache':cache},{process:{env:{SUPABASE_URL:'https://test.invalid',SUPABASE_SECRET_KEY:'test'}},fetch:async()=>({ok:false,status:409,json:async()=>({code:'PT409'})})});
+ await assert.rejects(()=>db.supabaseFunction('stock_notifications',{}),e=>e.code==='40001','PT409 must retain application conflict handling');
+ let now=100000,requests=0;const storage=new Map(),timers=[],locks=new Set();let release;
+ const gate=new Promise(r=>release=r);const hookMocks={'react':{useEffect:fn=>fn(),useState:()=>[{},()=>{}]},'./sorting-notifications':{NOTIFICATION_EVENT:'changed',clearLegacyNotificationStorage(){},notificationKey:u=>'notices:'+u,notificationSummary:()=>({count:0,items:[]}),readNotificationState:()=>({notices:[]}),notificationReadPending:()=>false,notificationRequestVersion:()=>0,storeSharedNotificationSummary(){}}};
+ const hook=load('src/lib/use-sorting-notifications.ts',hookMocks,{Date:class extends Date{static now(){return now;}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},navigator:{locks:{request:async(name,options,fn)=>{if(locks.has(name))return fn(null);locks.add(name);try{return await fn({name});}finally{locks.delete(name);}}}},document:{visibilityState:'visible',addEventListener(){},removeEventListener(){}},window:{setInterval:(fn,ms)=>{assert.equal(ms,30000);timers.push(fn);return timers.length;},clearInterval(){},addEventListener(){},removeEventListener(){}},Audio:class{play(){return Promise.resolve();}pause(){}},fetch:async()=>{requests++;await gate;return {ok:true,json:async()=>({count:0,items:[]})};}});
+ hook.useSortingNotifications('tabs',true);hook.useSortingNotifications('tabs',true);await delay(1);assert.equal(requests,1,'Only one same-user tab may poll');release();await delay(5);
+ timers[1]();await delay(5);assert.equal(requests,1,'A second tab must reuse recent shared results');now+=30000;timers[0]();timers[1]();await delay(5);assert.equal(requests,2,'Polling must resume after 30 seconds');
+ console.log('PASS: server single-flight, user isolation, acknowledgement invalidation, bounded retry/backoff, PT409 mapping, cross-tab polling and unchanged 30-second interval');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -19,7 +19,7 @@ export async function supabaseFunction<T>(name: 'stock_bridge'|'stock_history'|'
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     // Never log credentials, request payloads, or password hashes.
-    throw new DatabaseRequestError(`Supabase ${name} failed (${response.status}, ${body.code || 'unknown'})`,body.code||'unknown');
+    throw new DatabaseRequestError(`Supabase ${name} failed (${response.status}, ${body.code || 'unknown'})`,body.code==='PT409'?'40001':body.code||'unknown');
   }
   return response.json() as Promise<T>;
 }
