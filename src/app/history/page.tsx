@@ -50,6 +50,7 @@ export default function HistoryPage() {
   const [sortOrder, setSortOrder] = useState('NEWEST'); // ✅ เพิ่มสถานะการเรียงลำดับ
   
   const [currentPage, setCurrentPage] = useState(1);
+  const [paging,setPaging]=useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(20); // ✅ เปลี่ยนเป็น State ให้เลือกได้
   const [isAdmin, setIsAdmin] = useState(false);
   const [archiveDays, setArchiveDays] = useState(180);
@@ -80,7 +81,7 @@ export default function HistoryPage() {
         if(includeSuppliers){setSupplierList(data.suppliers||[]);suppliersLoaded.current=true;}
         if(data.page!==currentPage)setCurrentPage(data.page);
       }catch(err){if(!controller.signal.aborted)setError(err instanceof Error?err.message:'โหลดประวัติไม่สำเร็จ');}
-      finally{if(!controller.signal.aborted)setLoading(false);}
+      finally{if(!controller.signal.aborted){setLoading(false);setPaging(false);}}
     };
     void load();return()=>controller.abort();
   },[currentPage,itemsPerPage,debouncedSearch,filterStatus,filterSupplier,sortOrder,refreshVersion]);
@@ -151,6 +152,13 @@ export default function HistoryPage() {
 
  return (
     <div className="app-shell font-sans text-slate-900">
+      {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
+        <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          กำลังโหลดหน้าที่ {currentPage}…
+        </div>
+      </div>}
+
       <div className="app-container">
         
         {/* แผงควบคุม Filter & Sort */}
@@ -425,15 +433,15 @@ export default function HistoryPage() {
         </div>
 
         {/* Pagination Controls */}
-        {!loading && totalPages > 1 && (
+        {totalPages > 1 && (
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pb-10">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               หน้า {currentPage} / {totalPages} (ทั้งหมด {total} รายการ)
             </div>
             <div className="flex items-center gap-2">
               <button
-                aria-label="หน้าก่อนหน้า" disabled={loading || currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
+                aria-label="หน้าก่อนหน้า" disabled={paging || loading || currentPage === 1}
+                onClick={() => {setPaging(true);setCurrentPage(prev => prev - 1);}}
                 className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
                   currentPage === 1 ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
                 }`}
@@ -446,7 +454,8 @@ export default function HistoryPage() {
                     return (
                       <button
                         key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
+                        disabled={paging || loading || currentPage===pageNum}
+                        onClick={() => {setPaging(true);setCurrentPage(pageNum);}}
                         className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${
                           currentPage === pageNum ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'
                         }`}
@@ -459,8 +468,8 @@ export default function HistoryPage() {
               </div>
 
               <button
-                aria-label="หน้าถัดไป" disabled={loading || currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
+                aria-label="หน้าถัดไป" disabled={paging || loading || currentPage === totalPages}
+                onClick={() => {setPaging(true);setCurrentPage(prev => prev + 1);}}
                 className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
                   currentPage === totalPages ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
                 }`}

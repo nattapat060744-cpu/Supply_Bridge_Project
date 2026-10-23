@@ -73,6 +73,7 @@ export default function PurchasePage() {
   const [formData, setFormData] = useState({ id: '', name: '', supplier: '', storeQty: '', warehouseQty: '', note: '' });
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [paging,setPaging]=useState(false);
   const itemsPerPage = 6;
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -90,6 +91,7 @@ const [selectedBatch, setSelectedBatch] = useState<OrderItem[] | null>(null);
 const [authorized,setAuthorized]=useState(false);
 const workPage=useWorkPage<OrderItem>({kind:'purchase',page:currentPage,q:searchTerm,enabled:authorized,onPage:setCurrentPage});
 const loading=workPage.loading;
+  useEffect(()=>{if(!workPage.loading)setPaging(false);},[workPage.loading]);
 const rawData=workPage.issues;
 const batches=useMemo(()=>workPage.items.reduce<Record<string,OrderItem[]>>((groups,item)=>{
  const key=item.batchId||item.Group_ID||'ทั่วไป';(groups[key]??=[]).push(item);return groups;
@@ -513,6 +515,13 @@ const submitAddMore = async () => {
 
   return (
     <div className="app-shell font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
+      {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
+        <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          กำลังโหลดหน้าที่ {currentPage}…
+        </div>
+      </div>}
+
       {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
       {/* --- การแจ้งเตือน --- */}
       <div className="fixed top-6 right-6 z-100 flex flex-col gap-3">
@@ -776,8 +785,8 @@ const submitAddMore = async () => {
         {totalPages > 1 && (
           <div className="mt-12 flex justify-center items-center gap-2 pb-10">
             <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
+              disabled={paging || workPage.loading || currentPage === 1}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >
               ← ก่อนหน้า
@@ -791,7 +800,8 @@ const submitAddMore = async () => {
                     pages.push(
                       <button
                         key={i}
-                        onClick={() => setCurrentPage(i)}
+                        disabled={paging || workPage.loading || currentPage===i}
+                        onClick={() => {setPaging(true);setCurrentPage(i);}}
                         className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
                       >
                         {i}
@@ -805,8 +815,8 @@ const submitAddMore = async () => {
               })()}
             </div>
             <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
+              onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
+              disabled={paging || workPage.loading || currentPage === totalPages}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >
               ถัดไป →

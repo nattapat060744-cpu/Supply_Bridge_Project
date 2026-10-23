@@ -190,6 +190,7 @@ export default function SortingPage() {
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [paging,setPaging]=useState(false);
   const [totalBatches,setTotalBatches]=useState(0);
   const [totalPages,setTotalPages]=useState(1);
   const [pageBatchIds,setPageBatchIds]=useState<string[]>([]);
@@ -327,7 +328,7 @@ const fetchStatus = async () => {
       
     } catch (err) {
       if(sequence===pageSequence.current && !controller.signal.aborted)setLoadError(err instanceof Error?err.message:'โหลดข้อมูลไม่สำเร็จ');
-    } finally {if(sequence===pageSequence.current)setLoading(false);}
+    } finally {if(sequence===pageSequence.current){setLoading(false);setPaging(false);}}
   };
 
   const currentBatchIds=pageBatchIds;
@@ -593,6 +594,13 @@ const fetchStatus = async () => {
 
   return (
     <div className="app-shell font-sans pb-20">
+      {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
+        <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          กำลังโหลดหน้าที่ {currentPage}…
+        </div>
+      </div>}
+
 <div className="app-container">
         
         {/* Header Section */}
@@ -1007,8 +1015,8 @@ const fetchStatus = async () => {
         {totalPages > 1 && (
           <div className="mt-12 flex justify-center items-center gap-2 pb-10">
             <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
+              disabled={paging || loading || currentPage === 1}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >← ก่อนหน้า</button>
             <div className="flex gap-1 items-center">
@@ -1020,7 +1028,8 @@ const fetchStatus = async () => {
                     pages.push(
                       <button
                         key={i}
-                        onClick={() => setCurrentPage(i)}
+                        disabled={paging || loading || currentPage===i}
+                        onClick={() => {setPaging(true);setCurrentPage(i);}}
                         className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
                       >
                         {i}
@@ -1034,8 +1043,8 @@ const fetchStatus = async () => {
               })()}
             </div>
             <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
+              onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
+              disabled={paging || loading || currentPage === totalPages}
               className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >ถัดไป →</button>
           </div>
