@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { useSortingNotifications } from '@/lib/use-sorting-notifications';
-import { pendingNotificationKey } from '@/lib/sorting-notifications';
+import { acknowledgeAllSortingNotifications,pendingNotificationKey } from '@/lib/sorting-notifications';
 
 interface User {
   username?: string;
@@ -94,6 +94,10 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, [pathname, handleLogout]);
 
+  useEffect(()=>{
+    if(pathname==='/sorting'&&user?.username&&['ADMIN','SORTING','SORTING_VIEWER','STOCK_SORTING_MANAGER'].includes(user.department))void acknowledgeAllSortingNotifications(user.username);
+  },[pathname,user?.username,user?.department]);
+
   if (pathname === '/') return null;
 
   const meta = pageMeta[pathname] || { eyebrow: 'Supply Bridge', title: 'Dashboard', tone: 'slate' };
@@ -112,6 +116,7 @@ export default function Navbar() {
 
   const openSortingNoti = (batchId?: string) => {
     setShowSortingNotiMenu(false);
+    if(pathname==='/sorting'&&user?.username)void acknowledgeAllSortingNotifications(user.username);
 
     if (pathname !== '/sorting') {
       if (batchId && user?.username) { try { sessionStorage.setItem(pendingNotificationKey(user.username), batchId); } catch { /* Navigation still works without storage. */ } }
@@ -155,7 +160,7 @@ export default function Navbar() {
             return (
               <button
                 key={item.href}
-                onClick={() => router.push(item.href)}
+                onClick={() => {if(item.href==='/sorting'&&pathname==='/sorting'&&user?.username)void acknowledgeAllSortingNotifications(user.username);router.push(item.href);}}
                 className={`relative rounded-lg px-3 py-2 text-xs font-bold transition-all ${
                   active
                     ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
@@ -245,6 +250,7 @@ export default function Navbar() {
                     key={item.href}
                     onClick={() => {
                       setShowUserMenu(false);
+                      if(item.href==='/sorting'&&pathname==='/sorting'&&user?.username)void acknowledgeAllSortingNotifications(user.username);
                       router.push(item.href);
                     }}
                     className="flex items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50"

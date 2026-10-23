@@ -78,12 +78,13 @@ export function notificationRequestVersion(username:string){return requestVersio
 export function storeSharedNotificationSummary(username:string,summary:NotificationSummary){
   writeNotificationState(username,{...emptyNotificationState(),initialized:true,observedAt:Date.now(),notices:summary.items});
 }
-export async function acknowledgeSortingBatch(username:string,batchId:string,visibleRows:readonly object[]){
+export function acknowledgeAllSortingNotifications(username:string){return acknowledgeSortingBatch(username,'',[],true);}
+export async function acknowledgeSortingBatch(username:string,batchId:string,visibleRows:readonly object[],all=false){
   if(!username)return;
   pendingReads.add(username);requestVersions.set(username,notificationRequestVersion(username)+1);
   const job=(readQueues.get(username)||Promise.resolve()).then(async()=>{try{
     const rows=visibleRows.map(row=>{const r=row as Record<string,unknown>;return {Row_UID:r.Row_UID,Revision:r.Revision,Group_ID:r.Group_ID??r.batchId,Group_Name:r.Group_Name??r.batchName,ChangeSignature:r.ChangeSignature};});
-    const response=await fetch('/api/order/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({batchId,rows}),signal:AbortSignal.timeout(30000)});
+    const response=await fetch('/api/order/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(all?{all:true}:{batchId,rows}),signal:AbortSignal.timeout(30000)});
     if(response.ok&&currentNotificationUser()===username)storeSharedNotificationSummary(username,await response.json());
   }catch{/* Keep the notice unread until the server confirms it. */}});
   readQueues.set(username,job);
