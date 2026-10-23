@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import {parseStockImport} from '@/lib/stock-import';
 import IssueTracking from '@/components/IssueTracking';
+import {useWorkPage} from '@/lib/use-work-page';
 
 interface StockItem {
   rowId: number;
@@ -63,8 +64,6 @@ export default function StockPage() {
 
   const router = useRouter();
 
-  const [items, setItems] = useState<StockItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedBatch, setSelectedBatch] = useState<StockItem[] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiverName, setReceiverName] = useState('');
@@ -93,21 +92,22 @@ export default function StockPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; 
-  const previousDataRef = useRef<{ [key: string]: string }>({});
-
-  const fetchOrderedItems = async () => {
-    setLoading(true);
-    try {
-      const res = await checkedFetch('/api/stock');
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      alert('ดึงข้อมูลไม่ได้ครับ');
-    } finally {
-      setLoading(false);
-    }
+  const [authorized,setAuthorized]=useState(false);
+  const workPage=useWorkPage<StockItem>({kind:'stock',page:currentPage,q:searchTerm,supplier:selectedSupplier,enabled:authorized,onPage:setCurrentPage});
+  const items=workPage.items;
+  const loading=workPage.loading&&!items.length;
+  const fetchOrderedItems=workPage.refresh;
+  const [auxItems,setAuxItems]=useState<StockItem[]>([]);
+  const [auxLoading,setAuxLoading]=useState(false);
+  const auxRequest=useRef<Promise<StockItem[]>|null>(null);
+  const loadAllStock=async()=>{
+    if(auxRequest.current)return auxRequest.current;
+    setAuxLoading(true);
+    const request=(async()=>{const response=await checkedFetch('/api/stock');const data=await response.json();if(!Array.isArray(data))throw new Error('ข้อมูลไม่ถูกต้อง');setAuxItems(data);return data as StockItem[];})();
+    auxRequest.current=request;
+    try{return await request;}finally{if(auxRequest.current===request){auxRequest.current=null;setAuxLoading(false);}}
   };
-
+  const openBulk=async()=>{try{await loadAllStock();setIsBulkModalOpen(true);}catch{alert('โหลดรายการรับสินค้าไม่สำเร็จ กรุณาลองใหม่');}};
 
  useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -135,7 +135,7 @@ export default function StockPage() {
         }
 
         // 3. ถ้าผ่านเงื่อนไข ค่อยโหลดข้อมูล
-        await fetchOrderedItems(); 
+        setAuthorized(true); 
       } catch (e) {
         console.error("Auth Error:", e);
         router.push('/');
@@ -144,26 +144,7 @@ export default function StockPage() {
 
     checkAuthAndFetch();
   }, [router]);
-  const fetchPendingOrders = async () => {
-    try {
-      const res = await fetch(`/api/purchase?t=${Date.now()}`);
-      if (!res.ok) throw new Error('Network response was not ok');
-      const data = await res.json();
-      
-      data.forEach((item: StockApiItem) => {
-        const itemId = String(item.id || item.ID || item.rowNumber || '');
-        if (!itemId) return;
-        const currentItemStr = JSON.stringify(item);
-        if (previousDataRef.current[itemId] && previousDataRef.current[itemId] !== currentItemStr) {
-          console.log(`รายการ ${itemId} อัปเดตข้อมูล`);
-        }
-        previousDataRef.current[itemId] = currentItemStr;
-      });
-      fetchOrderedItems(); 
-    } catch (err) {
-      console.error('เกิดข้อผิดพลาดในการดึงข้อมูลอัปเดต:', err);
-    }
-  };
+  const fetchPendingOrders=fetchOrderedItems;
 
   const addToRecvList = (item: StockItem) => {
     const isExist = recvList.find(i => i.rowId === item.rowId);
@@ -312,10 +293,11 @@ const handlePrint = (groupId: string, items: StockItem[]) => {
     printWindow.document.close();
   };
 
-const exportToExcel = () => {
+const exportToExcel = async () => {
+    let exportItems:StockItem[];try{exportItems=await loadAllStock();}catch{alert('โหลดข้อมูล Export ไม่สำเร็จ');return;}
     // 1. ดึงข้อมูลตามที่เรา Filter ไว้บนหน้าจอ (คำค้นหา + บริษัท)
     const s = searchTerm.toLowerCase();
-    const filteredForExport = items.filter(item => {
+    const filteredForExport = exportItems.filter(item => {
       const matchStatus = item.status === 'ORDERED'; // เอาเฉพาะที่ยังไม่ได้รับ
       const matchSearch = (
         item.productName?.toLowerCase().includes(s) || 
@@ -442,18 +424,7 @@ const exportToExcel = () => {
       const s = searchTerm.toLowerCase();
 
       // กรองข้อมูลทั้งหมดก่อน โดยรวมเงื่อนไข Supplier เข้าไปด้วย
-      const filtered = items.filter(item => {
-        const matchStatus = item.status === 'ORDERED';
-        const matchSearch = (
-          item.productName?.toLowerCase().includes(s) ||
-          item.productID?.toString().toLowerCase().includes(s) ||
-          item.groupId?.toLowerCase().includes(s) ||
-          item.supplier?.toLowerCase().includes(s)
-        );
-        const matchSupplier = selectedSupplier === 'all' || item.supplier === selectedSupplier;
-        
-        return matchStatus && matchSearch && matchSupplier;
-      });
+      const filtered = items;
 
       // จัดกลุ่มสินค้า (Grouping)
       const groups: { [key: string]: ProductGroup } = {};
@@ -481,21 +452,18 @@ const exportToExcel = () => {
     const total = Math.ceil(sortedProducts.length / itemsPerPage);
     
     // ตัดแบ่งหน้า (Pagination)
-    const sliced = sortedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const sliced = sortedProducts;
 
     return { 
       displayProducts: sliced, 
-      totalPages: total,
-      totalItemsCount: sortedProducts.length
+      totalPages: workPage.totalPages,
+      totalItemsCount: workPage.total
     };
     // เพิ่ม selectedSupplier เข้าไปใน Dependency เพื่อให้ Re-render เมื่อเปลี่ยนบริษัทครับ
-  }, [items, searchTerm, selectedSupplier, currentPage]);
+  }, [items, searchTerm, selectedSupplier, currentPage, workPage.totalPages, workPage.total]);
 
   // ดึงรายชื่อ Supplier ทั้งหมดออกมาทำ Dropdown
-  const suppliers = useMemo(() => {
-    const list = Array.from(new Set(items.map(item => item.supplier).filter(Boolean)));
-    return ['all', ...list];
-  }, [items]);
+  const suppliers=['all',...workPage.suppliers];
 
   // ปรับ useMemo ของ displayProducts ให้รองรับการกรอง Supplier
   const filteredItems = useMemo(() => {
@@ -632,9 +600,10 @@ const handleBatchSubmit = async () => {
     </div>
   );
 
- const handleFinalExport = () => {
+ const handleFinalExport = async () => {
+    let exportItems:StockItem[];try{exportItems=await loadAllStock();}catch{alert('โหลดข้อมูล Export ไม่สำเร็จ');return;}
     // 1. กรองข้อมูลตามรายชื่อบริษัทที่ติ๊กเลือกไว้
-    const dataToExport = items.filter(item => {
+    const dataToExport = exportItems.filter(item => {
       const matchStatus = item.status === 'ORDERED';
       const matchSupplier = exportSuppliers.includes(item.supplier);
       return matchStatus && matchSupplier;
@@ -846,6 +815,7 @@ const handleConfirmImport = async () => {
         
         // ✅ แก้ไขเซฟตี้ตรงจุดนี้: สั่งให้โหลดและรีเฟรชข้อมูลหน้าจอด้วย router.refresh() 
         // เพื่อให้หน้าจออัปเดตสถานะล่าสุดทันทีโดยไม่ติดเออร์เรอร์ TypeScript
+        await fetchOrderedItems();
         router.refresh();
         
       } else {
@@ -861,6 +831,7 @@ const handleConfirmImport = async () => {
 
   return (
       <div className="app-container">
+        {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
         {/* ส่วนหัวข้อหลัก */}
         <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-yellow-600">
             <div className="relative z-10">
@@ -949,7 +920,8 @@ const handleConfirmImport = async () => {
           <div className="flex flex-col gap-2">
             {/* ปุ่มหลัก: ลงทะเบียนรับของ */}
             <button 
-              onClick={() => setIsBulkModalOpen(true)}
+              onClick={() => void openBulk()}
+              disabled={auxLoading}
               className="primary-action w-full bg-slate-900 text-yellow-300 hover:bg-yellow-500 hover:text-slate-950"
             >
               <span className="text-xl group-hover:scale-125 transition-transform">📦</span>
@@ -981,7 +953,7 @@ const handleConfirmImport = async () => {
       </div>
             
       <IssueTracking
-        items={items}
+        items={workPage.issues}
         canEdit
         onEdit={setUpdatingItem}
         onForceComplete={handleForceComplete}
@@ -1206,7 +1178,7 @@ const handleConfirmImport = async () => {
                         {/* Search Results Dropdown */}
                         {innerSearch && (
                           <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-200 rounded-[28px] shadow-2xl z-80 max-h-60 overflow-y-auto p-2">
-                            {items
+                            {auxItems
                               .filter(i => {
                                 const matchSearch = i.productName.toLowerCase().includes(innerSearch.toLowerCase()) || i.productID.includes(innerSearch);
                                 const matchSupplier = selectedSupplier === 'all' || i.supplier === selectedSupplier;
@@ -1250,7 +1222,7 @@ const handleConfirmImport = async () => {
                           className="w-full appearance-none pl-12 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-[22px] outline-none focus:border-yellow-400 focus:bg-white font-bold text-slate-700 transition-all shadow-sm cursor-pointer"
                         >
                           <option value="all">ทุกบริษัทในระบบ</option>
-                          {[...new Set(items.map(i => i.supplier))].filter(Boolean).map(sup => (
+                          {[...new Set(auxItems.map(i => i.supplier))].filter(Boolean).map(sup => (
                             <option key={sup} value={sup}>{sup}</option>
                           ))}
                         </select>
@@ -1414,11 +1386,7 @@ const handleConfirmImport = async () => {
                         setIsBulkModalOpen(false);
                         alert('บันทึกข้อมูลแบบ Bulk เรียบร้อยครับพี่ชาย!');
                         
-                        if (typeof fetchOrderedItems === 'function') {
-                          fetchOrderedItems();
-                        } else {
-                          router.refresh();
-                        }
+                        await fetchOrderedItems();
                       } catch (err) {
                         console.error(err);
                         alert(err instanceof Error?err.message:'บันทึกไม่สำเร็จ');
@@ -1638,7 +1606,7 @@ const handleConfirmImport = async () => {
             <div className="flex gap-2 mb-4">
               <button 
                 onClick={() => {
-                  const currentVisible = Array.from(new Set(items.map(i => i.supplier)))
+                  const currentVisible = suppliers.filter(s=>s!=='all')
                     .filter(s => s && s.toLowerCase().includes(supplierSearch.toLowerCase())) as string[];
                   setExportSuppliers(Array.from(new Set([...exportSuppliers, ...currentVisible])));
                 }}
@@ -1656,7 +1624,7 @@ const handleConfirmImport = async () => {
             
             {/* 4. รายการบริษัท (Checkbox) */}
             <div className="flex-1 overflow-y-auto pr-2 mb-6 space-y-2 custom-scrollbar">
-              {Array.from(new Set(items.map(i => i.supplier)))
+              {suppliers.filter(s=>s!=='all')
                 .filter(s => s && s.toLowerCase().includes(supplierSearch.toLowerCase()))
                 .sort()
                 .map(s => (

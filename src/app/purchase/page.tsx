@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import IssueTracking from '@/components/IssueTracking';
+import {useWorkPage} from '@/lib/use-work-page';
 
 interface OrderItem {
   ID?: string;
@@ -60,8 +61,6 @@ interface Notification {
 export default function PurchasePage() {
   const router = useRouter();
 
-  const [batches, setBatches] = useState<{ [key: string]: OrderItem[] }>({});
-  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openBatches, setOpenBatches] = useState<{ [key: string]: boolean }>({});
@@ -78,7 +77,6 @@ export default function PurchasePage() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [updatedItems, setUpdatedItems] = useState<Set<string>>(new Set());
-  const [rawData, setRawData] = useState<OrderItem[]>([]);
 
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [targetGroupId, setTargetGroupId] = useState('');
@@ -89,79 +87,14 @@ const [existingItems, setExistingItems] = useState<OrderItem[]>([]); // สำ�
 
 const [selectedBatch, setSelectedBatch] = useState<OrderItem[] | null>(null);
 
-const fetchPendingOrders = async (retries = 2) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const res = await fetch('/api/purchase', {
-        signal: controller.signal,
-        cache: 'no-store'
-      });
-
-      if (!res.ok) throw new Error('การเชื่อมต่อเครือข่ายมีปัญหา');
-      
-      const data = await res.json();
-      setRawData(data);
-
-      const sortedData = Array.isArray(data) 
-        ? [...data].sort((a: OrderItem, b: OrderItem) => {
-            const dateA = new Date(a.Created_At || a.createdAt || 0).getTime();
-            const dateB = new Date(b.Created_At || b.createdAt || 0).getTime();
-            return dateB - dateA;
-          }) 
-        : [];
-
-// 🔥 แก้ไขจุดนี้จุดเดียว: โชว์ PENDING ตลอด และทิ้ง ORDERED ไว้ 1 วัน (24 ชั่วโมง) แล้วค่อยหายไป
-      const currentTime = new Date().getTime();
-      const oneDayInMs = 24 * 60 * 60 * 1000; // 24 ชั่วโมง
-
-      const pendingItems = sortedData.filter((item: OrderItem) => {
-        const status = item.status?.toString().trim().toUpperCase();
-
-        // 1. ถ้าเป็น PENDING ให้โชว์ปกติเสมอ
-        if (status === 'PENDING') return true;
-
-        // 2. ถ้าเป็น ORDERED ให้เช็คเวลาว่าไม่เกิน 24 ชั่วโมง
-        if (status === 'ORDERED') {
-          // ดึงค่าฟิลด์วันที่จัดซื้อ (Created_At_P หรือ Created_At)
-          const purchaseDateStr = item.Created_At_P || item.Created_At;
-          if (!purchaseDateStr) return false;
-
-          // แปลงวันที่ไทย พ.ศ. ให้คอมพิวเตอร์คำนวณได้ถูกต้องผ่านฟังก์ชันของพี่ชาย
-          const orderTime = parseThaiDate(purchaseDateStr);
-          
-          // ถ้าเวลาปัจจุบัน ลบ เวลาสั่งซื้อ ยังไม่เกิน 24 ชั่วโมง ให้ยอมให้โชว์บนหน้าจอหลัก
-          if (orderTime > 0 && currentTime - orderTime <= oneDayInMs) {
-            return true;
-          }
-        }
-        return false;
-      });
-      
-      // นำข้อมูลที่กรองเสร็จแล้วมาจัดกลุ่มเข้า State batches เพื่อเอาไปวาดการ์ดหน้าจอหลัก
-      const grouped = pendingItems.reduce<Record<string, OrderItem[]>>((acc, item) => {
-        const key = item.batchId || item.Group_ID || 'ทั่วไป';
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(item);
-        return acc;
-      }, {});
-
-      setBatches(grouped);
-      //setCurrentPage(1); 
-
-    } catch (err: unknown) {
-      console.error('Error updating items:', err);
-      if (retries > 0 && !isAbortError(err)) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return fetchPendingOrders(retries - 1);
-      }
-      console.error('Failed to fetch pending orders:', err);
-    } finally {
-      clearTimeout(timeoutId);
-      setLoading(false);
-    }
-  };
+const [authorized,setAuthorized]=useState(false);
+const workPage=useWorkPage<OrderItem>({kind:'purchase',page:currentPage,q:searchTerm,enabled:authorized,onPage:setCurrentPage});
+const loading=workPage.loading;
+const rawData=workPage.issues;
+const batches=useMemo(()=>workPage.items.reduce<Record<string,OrderItem[]>>((groups,item)=>{
+ const key=item.batchId||item.Group_ID||'ทั่วไป';(groups[key]??=[]).push(item);return groups;
+},{}),[workPage.items]);
+const fetchPendingOrders=workPage.refresh;
 
   const groupedItems = useMemo(() => {
     const groups: { [key: string]: OrderItem[] } = {};
@@ -206,16 +139,6 @@ const fetchPendingOrders = async (retries = 2) => {
 
     return groups;
   }, [items, searchTerm]);
-  useEffect(() => { 
-    const interval = setInterval(() => {
-      // ✅ ไม่ poll ถ้าแท็บนี้ถูกซ่อนอยู่ (สลับไปแท็บอื่น/ย่อหน้าต่าง) กัน request ที่ไม่จำเป็น
-      if (document.visibilityState === 'visible') {
-        fetchPendingOrders();
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   const toggleBatch = (batchId: string) => {
     setExpandedBatches((prev) => {
       const next = new Set(prev);
@@ -249,7 +172,7 @@ useEffect(() => {
           return;
         }
 
-        await fetchPendingOrders(); 
+        setAuthorized(true); 
       } catch (e) {
         console.error("Auth Error:", e);
         router.push('/');
@@ -479,32 +402,14 @@ const handleFinalConfirm = async () => {
     setReviewItems(newItems);
   };
   
-  const filteredBatchKeys = useMemo(() => {
-      const keys = Object.keys(batches).filter(batchId => {
-        const bItems = batches[batchId];
-        return bItems.some(item =>
-          item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          batchId.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-
-      return keys.sort((a, b) => {
-        const dateA = parseThaiDate(batches[a][0]?.Created_At || "");
-        const dateB = parseThaiDate(batches[b][0]?.Created_At || "");
-        
-        if (dateB === dateA) {
-          return b.localeCompare(a); 
-        }
-        return dateB - dateA; 
-      });
-    }, [batches, searchTerm]);
+  const filteredBatchKeys=Object.keys(batches);
 
   const groupedByDate = useMemo(() => {
       const groups: { [key: string]: string[] } = {};
 
       const indexOfLastItem = currentPage * itemsPerPage;
       const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-      const currentItemsInPage = filteredBatchKeys.slice(indexOfFirstItem, indexOfLastItem);
+      const currentItemsInPage = filteredBatchKeys;
 
       currentItemsInPage.forEach(batchId => {
         const bItems = batches[batchId];
@@ -596,8 +501,8 @@ const submitAddMore = async () => {
     }
   };
 
-  const totalPages = Math.ceil(filteredBatchKeys.length / itemsPerPage);
-  const currentBatches = filteredBatchKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = workPage.totalPages;
+  const currentBatches = filteredBatchKeys;
 
   if (loading && Object.keys(batches).length === 0) return (
     <div className="app-shell flex flex-col items-center justify-center">
@@ -608,6 +513,7 @@ const submitAddMore = async () => {
 
   return (
     <div className="app-shell font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
+      {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
       {/* --- การแจ้งเตือน --- */}
       <div className="fixed top-6 right-6 z-100 flex flex-col gap-3">
         {notifications.map(noti => (
@@ -623,6 +529,7 @@ const submitAddMore = async () => {
       </div>
 
       <div className="app-container">
+        {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
         {/* --- ส่วนหัวข้อ --- */}
         <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-emerald-600">
           <div className="relative z-10">
@@ -677,14 +584,14 @@ const submitAddMore = async () => {
               placeholder="ค้นหารรอบสั่งซื้อ หรือชื่อสินค้า..." 
               className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
               value={searchTerm || ''}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {setSearchTerm(e.target.value);setCurrentPage(1);}}
             />
           </div>
           <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-50">
             <div className="text-2xl">📦</div>
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">บิลที่กำลังดำเนินการ</p>
-              <p className="text-2xl font-black text-emerald-600 leading-none">{filteredBatchKeys.length}</p>
+              <p className="text-2xl font-black text-emerald-600 leading-none">{workPage.total}</p>
             </div>
           </div>
         </div>
