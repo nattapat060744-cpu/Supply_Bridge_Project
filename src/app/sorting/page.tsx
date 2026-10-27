@@ -74,7 +74,7 @@ const parseThaiDate = parseBusinessDate;
     const batchItems = activeBatches[batchId];
     if (!batchItems || batchItems.length === 0) return;
 
-    const [{default:ExcelJS},{saveAs}]=await Promise.all([import('exceljs'),import('file-saver')]);
+    const [{default:ExcelJS},{default:saveAs}]=await Promise.all([import('exceljs'),import('file-saver')]);
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('ใบขอสั่งซื้อ');
 
@@ -180,6 +180,25 @@ export default function SortingPage() {
   const [loading, setLoading] = useState(true);
   const [expandedBatches, setExpandedBatches] = useState<{ [key: string]: boolean }>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [exportingBatch, setExportingBatch] = useState<string | null>(null);
+  const exportInProgress = useRef(false);
+  const [exportError, setExportError] = useState('');
+
+  const handleExport = async (batchId: string) => {
+    if (exportInProgress.current) return;
+    exportInProgress.current = true;
+    setExportingBatch(batchId);
+    setExportError('');
+    try {
+      await exportToExcel(batchId, activeBatches);
+    } catch (error) {
+      console.error('Sorting Excel export failed', error);
+      setExportError('ส่งออก Excel ไม่สำเร็จ กรุณาลองอีกครั้ง หากยังไม่ได้ให้รีเฟรชหน้าเว็บ');
+    } finally {
+      exportInProgress.current = false;
+      setExportingBatch(null);
+    }
+  };
   const [currentDepartment, setCurrentDepartment] = useState('');
   const isReadOnlyViewer = currentDepartment === 'SORTING_VIEWER';
   const canManageSorting = currentDepartment === 'SORTING' || currentDepartment === 'ADMIN' || currentDepartment === 'STOCK_SORTING_MANAGER';
@@ -602,6 +621,7 @@ const fetchStatus = async () => {
       </div>}
 
 <div className="app-container">
+        {exportError && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{exportError}</p>}
         
         {/* Header Section */}
           <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-blue-600">
@@ -755,11 +775,14 @@ const fetchStatus = async () => {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                exportToExcel(batchId, activeBatches);
+                                void handleExport(batchId);
                               }}
-                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20 whitespace-nowrap"
+                              type="button"
+                              disabled={exportingBatch !== null}
+                              aria-label={exportingBatch === batchId ? "กำลังส่งออก Excel" : "ส่งออก Excel"}
+                              className="disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20 whitespace-nowrap"
                             >
-                              <span>📊</span><span className="hidden md:inline">EXPORT EXCEL</span>
+                              <span>📊</span><span className="hidden md:inline">{exportingBatch === batchId ? "กำลังส่งออก…" : "EXPORT EXCEL"}</span>
                             </button>
                             )}
 
