@@ -509,15 +509,15 @@ const submitAddMore = async () => {
   if (loading && Object.keys(batches).length === 0) return (
     <div className="app-shell flex flex-col items-center justify-center">
       <div className="w-16 h-16 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-      <p className="text-slate-400 font-bold tracking-widest animate-pulse">กำลังโหลดข้อมูล...</p>
+      <p className="text-slate-400 font-bold animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
   );
 
   return (
-    <div className="app-shell font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="app-shell">
       {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
         <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
-          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-[var(--tone)]" />
           กำลังโหลดหน้าที่ {currentPage}…
         </div>
       </div>}
@@ -526,10 +526,10 @@ const submitAddMore = async () => {
       {/* --- การแจ้งเตือน --- */}
       <div className="fixed top-6 right-6 z-100 flex flex-col gap-3">
         {notifications.map(noti => (
-          <div key={noti.id} className="bg-white border-l-4 border-emerald-500 p-5 rounded-2xl shadow-xl flex items-center gap-4 animate-in slide-in-from-right duration-500 min-w-[320px] max-w-100">
+          <div key={noti.id} className="bg-white border-l-4 border-emerald-500 p-5 rounded-2xl shadow-xl flex items-center gap-4 pop-in min-w-[320px] max-w-100">
             <div className="text-2xl">📦</div>
             <div className="overflow-hidden">
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest truncate">อัปเดต: {noti.batchName}</p>
+              <p className="text-[11px] font-semibold text-emerald-600 truncate">อัปเดต: {noti.batchName}</p>
               <p className="text-slate-900 font-bold text-xs truncate">{noti.productName}</p>
             </div>
             <button onClick={() => setNotifications(n => n.filter(x => x.id !== noti.id))} className="ml-auto text-slate-300 hover:text-slate-600">✕</button>
@@ -540,21 +540,22 @@ const submitAddMore = async () => {
       <div className="app-container">
         {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
         {/* --- ส่วนหัวข้อ --- */}
-        <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-emerald-600">
-          <div className="relative z-10">
-            <span className="page-kicker text-emerald-600 mb-3 block">
-              Purchase Order System
-            </span>
-            <h1 className="page-title font-display">
-              ระบบ <span className="text-emerald-600 not-italic">สั่งซื้อสินค้า</span>
-            </h1>
-            <p className="page-subtitle mt-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              จัดการรายการขอซื้อและบันทึกประวัติการสั่งซื้อ
-            </p>
+        <section className="app-hero mb-6 flex flex-col gap-5 p-6 pl-8 md:flex-row md:items-end md:justify-between md:p-8 md:pl-10">
+          <div>
+            <p className="page-kicker mb-3">Purchase Order</p>
+            <h1 className="page-title font-display">สั่งซื้อสินค้า</h1>
+            <p className="page-subtitle mt-2">จัดการรายการขอซื้อจากธุรการคลัง และบันทึกประวัติการสั่งซื้อ</p>
           </div>
-          <div className="flex gap-3 mt-8 md:mt-0">
-            <button 
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="metric-tile px-5 py-3 text-center">
+              <p className="text-2xl font-bold leading-none">{workPage.total}</p>
+              <p className="mt-1 text-xs font-medium">บิลที่กำลังดำเนินการ</p>
+            </div>
+            <button onClick={() => fetchPendingOrders()} className="secondary-action">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5" /></svg>
+              รีเฟรช
+            </button>
+            <button
               onClick={() => {
                 // 🔥 ล้างค่าทุกอย่างเพื่อเริ่มบิลใหม่จริงๆ
                 setIsAddingMore(false);
@@ -568,41 +569,26 @@ const submitAddMore = async () => {
                 
                 setIsModalOpen(true);
               }}
-              className="primary-action bg-slate-900 text-white hover:bg-emerald-600 shadow-lg shadow-slate-900/10"
+              className="primary-action"
             >
-              <span className="text-xl">+</span> สร้างบิลใหม่
-            </button>
-            <button 
-              onClick={() => fetchPendingOrders()} 
-              className="primary-action bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/15"
-            >
-              <span className="text-xl">🔄</span> รีเฟรช
+              <span className="text-lg leading-none">+</span> สร้างบิลใหม่
             </button>
           </div>
-        </div>
+        </section>
 
         <IssueTracking items={rawData} />
 
 
-        {/* --- แถบค้นหา --- */}
-        <div className="mb-8 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl opacity-30">🔍</span>
-            <input 
-              type="text" 
-              placeholder="ค้นหารรอบสั่งซื้อ หรือชื่อสินค้า..." 
-              className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
-              value={searchTerm || ''}
-              onChange={(e) => {setSearchTerm(e.target.value);setCurrentPage(1);}}
-            />
-          </div>
-          <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-50">
-            <div className="text-2xl">📦</div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">บิลที่กำลังดำเนินการ</p>
-              <p className="text-2xl font-black text-emerald-600 leading-none">{workPage.total}</p>
-            </div>
-          </div>
+        <div className="relative mb-6">
+          <svg className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input
+            type="search"
+            aria-label="ค้นหารอบสั่งซื้อหรือสินค้า"
+            placeholder="ค้นหารอบสั่งซื้อ หรือชื่อสินค้า"
+            className="control-field w-full py-3.5 pl-12 pr-4 text-base"
+            value={searchTerm || ''}
+            onChange={(e) => {setSearchTerm(e.target.value);setCurrentPage(1);}}
+          />
         </div>
 
         {/* --- รายการบิลสินค้า --- */}
@@ -612,15 +598,11 @@ const submitAddMore = async () => {
             <div key={`date-group-${dateLabel}-${groupIdx}`} className="space-y-6">
               
               {/* --- ส่วนหัวข้อวันที่ (Date Header) --- */}
-              <div className="flex items-center gap-4 py-4">
-                <div className="h-px flex-1 bg-slate-200"></div>
-                <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
-                  <span className="text-lg">📅</span>
-                  <span className="text-sm font-black text-slate-600 uppercase tracking-tight">
-                    รายการของวันที่: {dateLabel}
-                  </span>
-                </div>
-                <div className="h-px flex-1 bg-slate-200"></div>
+              <div className="sticky top-[67px] z-10 flex items-center gap-3 bg-[var(--bg)]/90 py-2 backdrop-blur">
+                <span className="h-2 w-2 rounded-full bg-[var(--tone)]" />
+                <h3 className="text-sm font-semibold text-[var(--ink)]">{dateLabel}</h3>
+                <span className="text-xs text-[var(--muted)]">{batchIds.length} บิล</span>
+                <span className="h-px flex-1 bg-[var(--line)]" />
               </div>
 
               {/* --- รายการบิลของวันนั้นๆ --- */}
@@ -635,34 +617,27 @@ const submitAddMore = async () => {
                   className="app-card overflow-hidden mb-5 transition-all duration-300 hover:border-emerald-200"
                 >
                   {/* ส่วนหัวของบิล (Header) */}
-                  <div 
-                    className={`p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
+                  <div
+                    role="button" tabIndex={0} aria-expanded={isExpanded}
+                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleBatch(batchId); } }}
+                    className={`flex cursor-pointer flex-col gap-4 p-5 transition-colors md:flex-row md:items-center md:justify-between md:p-6 ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
                     onClick={() => toggleBatch(batchId)}
                   >
-                    <div className="flex items-center gap-6 w-full md:w-auto">
-                      {/* 🔥 2. ตัวเลข SKU ปรับเป็น Rounded 2xl */}
-                      <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${isExpanded ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
-                        <span className="text-xl leading-none">{bItems.length}</span>
-                        <span className="text-[8px] uppercase">SKU</span>
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-center transition-all ${isExpanded ? 'bg-[var(--tone-ink)] text-white shadow-sm' : 'bg-slate-100 text-slate-500'}`}>
+                        <div>
+                          <p className="text-lg font-bold leading-none">{bItems.length}</p>
+                          <p className="text-[10px]">รายการ</p>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">
-                          ชื่อรอบการสั่งซื้อ
-                        </span>
-                        <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                          {batchId}
-                        </h2>
-                        {/* 🔥 3. ป้ายกลุ่ม ปรับเป็น Rounded-full (ทรงแคปซูล) */}
-                        <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mt-1 inline-block uppercase italic border border-emerald-100/50">
-                          กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}
-                        </p>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-lg font-semibold text-[var(--ink)]">{batchId}</h2>
+                        <p className="mt-1 text-xs text-[var(--muted)]">กลุ่ม: {bItems[0]?.Group_ID || 'ทั่วไป'}</p>
                       </div>
                     </div>
-                      
-                      <div className="flex items-center gap-4 w-full md:w-auto">
-                        {/* 🔥 เพิ่มเฉพาะปุ่มนี้เข้ามาครับ */}
-                          <button 
+
+                    <div className="flex w-full items-center gap-2 md:w-auto">
+                      <button
                             onClick={(e) => { 
                               e.stopPropagation(); 
                               setTargetGroupId(batchId);
@@ -677,26 +652,22 @@ const submitAddMore = async () => {
                               
                               setIsModalOpen(true);
                             }}
-                            className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-6 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all border border-blue-100 shadow-sm active:scale-95"
-                          >
-                            ➕ เพิ่มรายการสินค้า
-                          </button>
-
-                        <button 
+                        className="secondary-action"
+                      >
+                        + เพิ่มสินค้า
+                      </button>
+                      <button
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             handleOpenReview(batchId); 
                           }}
-                          className="flex-1 md:flex-none bg-emerald-600 text-white hover:bg-slate-900 px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md active:scale-95 border-b-4 border-emerald-800"
-                        >
-                          📝 จัดการใบสั่งซื้อ
-                        </button>
-                        
-                        <div className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180 text-emerald-600' : 'text-slate-300'}`}>
-                          ▼
-                        </div>
-                      </div>
+                        className="primary-action flex-1 md:flex-none"
+                      >
+                        จัดการใบสั่งซื้อ
+                      </button>
+                      <svg aria-hidden="true" className={`shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[var(--tone-ink)]' : 'text-slate-300'}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
                     </div>
+                  </div>
                     
 
                     {/* ส่วนแสดงรายการสินค้าด้านใน (Expansion) - โค้ดเดิมทั้งหมด */}
@@ -705,10 +676,10 @@ const submitAddMore = async () => {
                         <div className="h-px bg-slate-100 mb-6"></div>
                         
                         <div className="hidden lg:grid grid-cols-12 gap-5 px-8 py-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
-                          <div className="col-span-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">รหัสสินค้า (SKU)</div>
-                          <div className="col-span-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">รายการสินค้า / SUP</div>
-                          <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">สถานะสต็อก</div>
-                          <div className="col-span-3 text-[11px] font-black text-slate-400 uppercase tracking-wider">หมายเหตุจัดซื้อ</div>
+                          <div className="col-span-2 text-[11px] font-semibold text-slate-400 tracking-wider">รหัสสินค้า (SKU)</div>
+                          <div className="col-span-4 text-[11px] font-semibold text-slate-400 tracking-wider">รายการสินค้า / SUP</div>
+                          <div className="col-span-3 text-[11px] font-semibold text-slate-400 tracking-wider text-center">สถานะสต็อก</div>
+                          <div className="col-span-3 text-[11px] font-semibold text-slate-400 tracking-wider">หมายเหตุจัดซื้อ</div>
                         </div>
 
                         <div className="flex flex-col gap-3">
@@ -724,17 +695,17 @@ const submitAddMore = async () => {
                                 className="group/item grid grid-cols-1 lg:grid-cols-12 items-center gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all shadow-sm hover:shadow-md"
                               >
                                 <div className="lg:col-span-2">
-                                  <span className="inline-block bg-slate-950 text-emerald-400 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border-b-2 border-emerald-600">
+                                  <span className="inline-block bg-emerald-50 !text-emerald-800 ring-1 ring-emerald-200 text-[11px] font-semibold px-3 py-1.5 rounded-lg">
                                     {item.productId || item.Product_ID || item.productID}
                                   </span>
                                 </div>
 
                                 <div className="lg:col-span-4">
                                   <div className="flex flex-col">
-                                    <p className="font-black text-[15px] uppercase italic text-slate-800 group-hover/item:text-emerald-600 transition-colors">
+                                    <p className="font-semibold text-[15px] text-slate-800 group-hover/item:text-emerald-600 transition-colors">
                                       {item.name || item.Product_Name || item.productName}
                                     </p>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                                    <span className="text-[11px] font-bold text-slate-400 mt-1">
                                       SUP: {item.supplier || item.Supplier || '-'}
                                     </span>
                                   </div>
@@ -742,16 +713,16 @@ const submitAddMore = async () => {
                                 
                                 <div className="lg:col-span-3 grid grid-cols-2 gap-3">
                                   <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 text-center">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">หน้าร้าน</p>
-                                    <p className="text-sm font-black text-slate-700">
+                                    <p className="text-[11px] font-semibold text-slate-400 mb-1">หน้าร้าน</p>
+                                    <p className="text-sm font-semibold text-slate-700">
                                       {item.orderQty || item.Shop_Qty || '0'}
                                     </p>
                                   </div>
                                   <div className={`px-3 py-2 rounded-xl border text-center transition-all ${
                                     isLowStock ? 'bg-red-50 border-red-200 text-red-600' : 'bg-blue-50 border-blue-100 text-blue-600'
                                   }`}>
-                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">คลัง</p>
-                                    <p className="text-sm font-black leading-none">
+                                    <p className="text-[11px] font-semibold text-slate-400 mb-1">คลัง</p>
+                                    <p className="text-sm font-semibold leading-none">
                                       {item.warehouseQty || item.Stock_Qty || '0'}
                                     </p>
                                   </div>
@@ -760,12 +731,12 @@ const submitAddMore = async () => {
                                 <div className="lg:col-span-3">
                                   {note ? (
                                     <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
-                                      <p className="text-[10px] font-bold text-amber-600 italic leading-relaxed">
+                                      <p className="text-[11px] font-bold text-amber-600 leading-relaxed">
                                         📌 {note}
                                       </p>
                                     </div>
                                   ) : (
-                                    <span className="text-[10px] text-slate-300 italic">ไม่มีหมายเหตุ</span>
+                                    <span className="text-[11px] text-slate-300 ">ไม่มีหมายเหตุ</span>
                                   )}
                                 </div>
                               </div>
@@ -783,44 +754,44 @@ const submitAddMore = async () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-12 flex justify-center items-center gap-2 pb-10">
-            <button 
-              onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
-              disabled={paging || workPage.loading || currentPage === 1}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ← ก่อนหน้า
-            </button>
-            <div className="flex gap-1 items-center">
-              {(() => {
-                const pages = [];
-                const range = 1;
-                for (let i = 1; i <= totalPages; i++) {
-                  if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
-                    pages.push(
-                      <button
-                        key={i}
-                        disabled={paging || workPage.loading || currentPage===i}
-                        onClick={() => {setPaging(true);setCurrentPage(i);}}
-                        className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
-                      >
-                        {i}
-                      </button>
-                    );
-                  } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
-                    pages.push(<span key={i} className="px-2 text-slate-400">...</span>);
+          <div className="mt-10 flex flex-col items-center justify-between gap-4 pb-6 md:flex-row">
+            <p className="text-sm text-[var(--muted)]">หน้า {currentPage} จาก {totalPages}</p>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="หน้าก่อนหน้า"
+                onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
+                disabled={paging || workPage.loading || currentPage === 1}
+                className="secondary-action h-10 w-10 !p-0"
+              >←</button>
+              <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-white p-1 shadow-sm">
+                {(() => {
+                  const pages = [];
+                  const range = 1;
+                  for (let i = 1; i <= totalPages; i++) {
+                    if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+                      const on = currentPage === i;
+                      pages.push(
+                        <button
+                          key={i} aria-current={on ? 'page' : undefined}
+                          disabled={paging || workPage.loading || on}
+                          onClick={() => {setPaging(true);setCurrentPage(i);}}
+                          className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${on ? 'bg-[var(--tone-ink)] text-white' : 'text-[var(--muted)] hover:bg-slate-100'}`}
+                        >{i}</button>
+                      );
+                    } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
+                      pages.push(<span key={i} className="px-1 text-slate-300">…</span>);
+                    }
                   }
-                }
-                return pages;
-              })()}
+                  return pages;
+                })()}
+              </div>
+              <button
+                aria-label="หน้าถัดไป"
+                onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
+                disabled={paging || workPage.loading || currentPage === totalPages}
+                className="secondary-action h-10 w-10 !p-0"
+              >→</button>
             </div>
-            <button 
-              onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
-              disabled={paging || workPage.loading || currentPage === totalPages}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ถัดไป →
-            </button>
           </div>
         )}
       </div>
@@ -828,17 +799,17 @@ const submitAddMore = async () => {
       {/* --- Review Modal (Reviewing existing batch) --- */}
       {reviewBatch && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-2 md:p-6">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col border border-white animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col border border-white animate-in fade-in zoom-in-95 duration-300">
             
             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <div>
-                  <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">ยืนยันรายการสั่งซื้อ</p>
-                  <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900">ตรวจสอบ: {reviewBatch}</h2>
+                  <p className="text-emerald-600 text-[11px] font-semibold mb-1">ยืนยันรายการสั่งซื้อ</p>
+                  <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">ตรวจสอบ: {reviewBatch}</h2>
                 </div>
                 <button 
                   onClick={autoFillOrderQty}
-                  className="bg-slate-100 hover:bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 border border-emerald-100"
+                  className="bg-slate-100 hover:bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl font-semibold text-[11px] transition-all flex items-center gap-2 border border-emerald-100"
                 >
                   ⚡ สั่งตามยอดหน้าร้าน
                 </button>
@@ -852,46 +823,46 @@ const submitAddMore = async () => {
             <div className="flex-1 overflow-hidden flex flex-col bg-slate-50/30">
               <div className="px-6 md:px-10 py-4 bg-slate-900 shadow-lg z-10 shrink-0">
                 <div className="flex items-center gap-6">
-                  <div className="flex-1 min-w-50 text-white text-[10px] font-black uppercase tracking-[0.2em] italic">ชื่อสินค้า / รายละเอียด</div>
-                  <div className="grid grid-cols-2 gap-3 min-w-50 text-white text-[10px] font-black uppercase tracking-widest text-center">
+                  <div className="flex-1 min-w-50 text-white text-[11px] font-semibold tracking-wide ">ชื่อสินค้า / รายละเอียด</div>
+                  <div className="grid grid-cols-2 gap-3 min-w-50 text-white text-[11px] font-semibold text-center">
                     <span>ยอดจากร้าน</span>
                     <span>คลังเหลือ</span>
                   </div>
-                  <div className="w-50 text-white text-[10px] font-black uppercase tracking-widest text-center">จำนวนสั่ง (ลัง × ชิ้น)</div>
+                  <div className="w-50 text-white text-[11px] font-semibold text-center">จำนวนสั่ง (ลัง × ชิ้น)</div>
                   <div className="w-11"></div>
-                  <div className="flex-[1.5] md:max-w-75 text-white text-[10px] font-black uppercase tracking-widest md:pl-6">หมายเหตุการสั่งซื้อ</div>
+                  <div className="flex-[1.5] md:max-w-75 text-white text-[11px] font-semibold md:pl-6">หมายเหตุการสั่งซื้อ</div>
                   <div className="w-24"></div>
                 </div>
               </div>
 
               <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-3 custom-scrollbar">
                 {reviewItems.map((item, idx) => (
-                  <div key={`review-item-${item.id || idx}`} className={`p-4 rounded-3xl border transition-all duration-300 flex flex-col md:flex-row items-center gap-6 ${item.isRejected ? 'bg-red-50/50 border-red-100 opacity-60' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-md'}`}>
+                  <div key={`review-item-${item.id || idx}`} className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col md:flex-row items-center gap-6 ${item.isRejected ? 'bg-red-50/50 border-red-100 opacity-60' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-md'}`}>
                     <div className="flex-1 min-w-50 w-full">
-                      <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">ID: {item.productId || item.Product_ID}</span>
-                      <div className="font-black text-base text-slate-800 uppercase italic truncate">{item.name || item.Product_Name}</div>
-                      <span className="text-[9px] font-bold text-emerald-600 uppercase">ซัพ: {item.supplier || item.Supplier}</span>
+                      <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mb-1 inline-block">ID: {item.productId || item.Product_ID}</span>
+                      <div className="font-semibold text-base text-slate-800 truncate">{item.name || item.Product_Name}</div>
+                      <span className="text-[11px] font-bold text-emerald-600 ">ซัพ: {item.supplier || item.Supplier}</span>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3 min-w-50">
                       <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col items-center justify-center">
-                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1 md:hidden">ยอดจากร้าน</span>
-                        <span className="text-xl font-black text-slate-900">{item.orderQty || item.Shop_Qty}</span>
+                        <span className="text-[11px] font-semibold text-slate-400 mb-1 md:hidden">ยอดจากร้าน</span>
+                        <span className="text-xl font-semibold text-slate-900">{item.orderQty || item.Shop_Qty}</span>
                       </div>
                       <div className={`p-3 rounded-2xl border flex flex-col items-center justify-center ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className="text-[8px] font-black text-slate-400 uppercase mb-1 md:hidden">คลังเหลือ</span>
-                        <span className={`text-xl font-black ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'text-red-500' : 'text-slate-900'}`}>{item.warehouseQty || item.Stock_Qty}</span>
+                        <span className="text-[11px] font-semibold text-slate-400 mb-1 md:hidden">คลังเหลือ</span>
+                        <span className={`text-xl font-semibold ${Number(item.warehouseQty || item.Stock_Qty) <= 5 ? 'text-red-500' : 'text-slate-900'}`}>{item.warehouseQty || item.Stock_Qty}</span>
                       </div>
                     </div>
 
                     {!item.isRejected ? (
-                      <div className="flex items-center bg-slate-100/50 p-1.5 rounded-3xl border border-slate-200 shadow-sm gap-1">
-                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border border-emerald-100 group transition-all hover:border-emerald-400">
-                          <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter mb-1 opacity-70">สั่ง (ลัง)</span>
+                      <div className="flex items-center bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200 shadow-sm gap-1">
+                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-lg shadow-sm border border-emerald-100 group transition-all hover:border-emerald-400">
+                          <span className="text-[11px] font-semibold text-emerald-600 mb-1 opacity-70">สั่ง (ลัง)</span>
                           <div className="flex items-baseline gap-1">
                             <input 
                               type="number" 
-                              className="w-12 bg-transparent text-slate-900 text-center font-black text-2xl outline-none" 
+                              className="w-12 bg-transparent text-slate-900 text-center font-semibold text-2xl outline-none" 
                               value={item.orderCarton || ''} 
                               onChange={e => {
                                 const newItems = [...reviewItems];
@@ -901,7 +872,7 @@ const submitAddMore = async () => {
                             />
                             <input 
                               type="text"
-                              className="w-8 bg-transparent text-[10px] text-slate-400 font-bold uppercase outline-none focus:text-emerald-600"
+                              className="w-8 bg-transparent text-[11px] text-slate-400 font-bold outline-none focus:text-emerald-600"
                               placeholder="ลัง"
                               value={item.cartonUnit || ''} 
                               onChange={e => {
@@ -915,12 +886,12 @@ const submitAddMore = async () => {
 
                         <div className="flex items-center justify-center w-6 text-slate-300 font-light text-2xl">×</div>
 
-                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-[18px] shadow-sm border border-blue-100 group transition-all hover:border-blue-400">
-                          <span className="text-[8px] font-black text-blue-600 uppercase tracking-tighter mb-1 opacity-70">แพ็ค (ชิ้น)</span>
+                        <div className="flex flex-col items-center min-w-22.5 px-3 py-2 bg-white rounded-lg shadow-sm border border-blue-100 group transition-all hover:border-blue-400">
+                          <span className="text-[11px] font-semibold text-blue-600 mb-1 opacity-70">แพ็ค (ชิ้น)</span>
                           <div className="flex items-baseline gap-1">
                             <input 
                               type="number" 
-                              className="w-12 bg-transparent text-slate-900 text-center font-black text-2xl outline-none" 
+                              className="w-12 bg-transparent text-slate-900 text-center font-semibold text-2xl outline-none" 
                               value={item.qtyPerCarton} 
                               onChange={e => {
                                 const newItems = [...reviewItems];
@@ -930,7 +901,7 @@ const submitAddMore = async () => {
                             />
                             <input 
                               type="text"
-                              className="w-8 bg-transparent text-[10px] text-slate-400 font-bold uppercase outline-none focus:text-blue-600"
+                              className="w-8 bg-transparent text-[11px] text-slate-400 font-bold outline-none focus:text-blue-600"
                               placeholder="ชิ้น"
                               value={item.innerUnit || ''} 
                               onChange={e => {
@@ -943,7 +914,7 @@ const submitAddMore = async () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="w-60 text-center text-red-400 font-black text-[10px] tracking-[0.2em] border-2 border-dashed border-red-100 py-5 rounded-3xl bg-red-50/30 uppercase italic">
+                      <div className="w-60 text-center text-red-400 font-semibold text-[11px] tracking-wide border-2 border-dashed border-red-100 py-5 rounded-2xl bg-red-50/30 ">
                         🚫 รายการนี้ถูกยกเลิก
                       </div>
                     )}
@@ -968,7 +939,7 @@ const submitAddMore = async () => {
                         newItems[idx].isRejected = !newItems[idx].isRejected;
                         setReviewItems(newItems);
                       }}
-                      className={`h-14 w-24 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${item.isRejected ? 'bg-emerald-600 text-white' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'}`}
+                      className={`h-14 w-24 rounded-2xl font-semibold text-[11px]   transition-all ${item.isRejected ? 'bg-emerald-600 text-white' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'}`}
                     >
                       {item.isRejected ? 'ย้อนกลับ' : 'ไม่สั่ง'}
                     </button>
@@ -984,18 +955,18 @@ const submitAddMore = async () => {
                     <span className="text-2xl">📦</span>
                  </div>
                  <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">สถานะคิวงาน</p>
-                   <p className="text-2xl font-black text-slate-900 leading-none">
+                   <p className="text-[11px] font-semibold text-slate-400 mb-1">สถานะคิวงาน</p>
+                   <p className="text-2xl font-semibold text-slate-900 leading-none">
                      {reviewItems.filter(i => !i.isRejected).length} <span className="text-emerald-600">รายการพร้อมสั่ง</span>
                    </p>
                  </div>
               </div>
               <div className="flex gap-3 w-full md:w-auto">
-                <button onClick={() => setReviewBatch(null)} className="px-8 py-5 font-black text-[12px] uppercase text-slate-400 hover:text-slate-900 transition-all">ยกเลิก</button>
+                <button onClick={() => setReviewBatch(null)} className="px-8 py-5 font-semibold text-xs text-slate-400 hover:text-slate-900 transition-all">ยกเลิก</button>
                 <button 
                   onClick={handleFinalConfirm} 
                   disabled={isSubmitting || reviewItems.every(i => !i.orderCarton && !i.isRejected)} 
-                  className="flex-1 md:flex-none bg-slate-900 text-white hover:bg-emerald-600 px-12 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-300"
+                  className="flex-1 md:flex-none bg-slate-900 text-white hover:bg-emerald-600 px-12 py-5 rounded-2xl font-semibold text-sm shadow-xl transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-300"
                 >
                   {isSubmitting ? 'กำลังส่งข้อมูล...' : '🚀 ยืนยันสั่งซื้อสินค้า'}
                 </button>
@@ -1008,19 +979,19 @@ const submitAddMore = async () => {
       {/* --- New Batch Modal (Single Screen & Fixed Layout) --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-110 p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25)] w-full max-w-7xl h-[85vh] flex flex-col border border-white/50 animate-in zoom-in-95 duration-500 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-7xl h-[85vh] flex flex-col border border-white/50 animate-in zoom-in-95 duration-500 overflow-hidden">
             
             {/* --- Header: ลด Padding ลงเพื่อเพิ่มพื้นที่ทำงาน --- */}
             <div className="px-10 py-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div className="flex items-center gap-5">
-                <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100">
+                <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-sm">
                   <span className="text-xl">📦</span>
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-                    New Purchase <span className="text-emerald-500 italic">Order</span>
+                  <h2 className="text-2xl font-semibold text-slate-900 tracking-tight ">
+                    New Purchase <span className="text-emerald-500 ">Order</span>
                   </h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">สร้างรายการจัดซื้อใหม่</p>
+                  <p className="text-[11px] font-bold text-slate-400 tracking-wide">สร้างรายการจัดซื้อใหม่</p>
                 </div>
               </div>
               <button 
@@ -1040,14 +1011,14 @@ const submitAddMore = async () => {
                   
                   {/* Step 1: Batch Name - แถวยาวเต็มพื้นที่ด้านบน */}
                   <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
-                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[9px]">01</span>
+                    <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-2 ml-1">
+                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[11px]">01</span>
                       ชื่อรอบการสั่งซื้อ (Batch Name)
                     </label>
                     <input 
                       type="text" 
                       placeholder="ระบุชื่อรอบ เช่น: เครื่องเขียน ล็อตด่วน..." 
-                      className={`w-full border p-5 rounded-3xl font-bold outline-none transition-all text-lg shadow-sm ${
+                      className={`w-full border p-5 rounded-2xl font-bold outline-none transition-all text-lg shadow-sm ${
                         isAddingMore ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:border-blue-500 focus:ring-4 ring-blue-500/5'
                       }`}
                       value={batchName}
@@ -1057,9 +1028,9 @@ const submitAddMore = async () => {
                   </div>
 
                   {/* Step 2: Product Input Grid */}
-                  <div className="space-y-3 bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1 mb-2">
-                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[9px]">02</span>
+                  <div className="space-y-3 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-2 ml-1 mb-2">
+                      <span className="w-5 h-5 rounded bg-slate-900 text-white flex items-center justify-center text-[11px]">02</span>
                       รายละเอียดสินค้า
                     </label>
                     
@@ -1097,7 +1068,7 @@ const submitAddMore = async () => {
                     />
                     <button 
                       onClick={addItemToTempList}
-                      className="w-full bg-slate-900 text-white py-4 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-600 transition-all active:scale-95"
+                      className="w-full bg-slate-900 text-white py-4 rounded-xl font-semibold text-[11px] shadow-lg hover:bg-blue-600 transition-all active:scale-95"
                     >
                       + เพิ่มลงรายการ
                     </button>
@@ -1109,20 +1080,20 @@ const submitAddMore = async () => {
               <div className="flex-1 flex flex-col p-10 bg-white overflow-hidden">
                 <div className="flex justify-between items-end mb-6 shrink-0">
                   <div>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Basket Items</h3>
-                    <p className="text-2xl font-black text-slate-900">รายการสั่งซื้อในบิล <span className="text-blue-600">({(existingItems?.length || 0) + items.length})</span></p>
+                    <h3 className="text-[11px] font-semibold tracking-wide text-slate-400 mb-1">Basket Items</h3>
+                    <p className="text-2xl font-semibold text-slate-900">รายการสั่งซื้อในบิล <span className="text-blue-600">({(existingItems?.length || 0) + items.length})</span></p>
                   </div>
                   {items.length > 0 && (
-                    <button onClick={() => setItems([])} className="text-[10px] font-black text-red-400 uppercase tracking-tighter hover:underline">Clear New Items</button>
+                    <button onClick={() => setItems([])} className="text-[11px] font-semibold text-red-400 hover:underline">Clear New Items</button>
                   )}
                 </div>
 
                 {/* ส่วนแสดงรายการสินค้า - ให้เลื่อนเฉพาะตรงนี้ถ้าของเยอะ */}
                 <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                   {(existingItems?.length === 0 && items.length === 0) ? (
-                    <div className="h-full border-2 border-dashed border-slate-100 rounded-[3rem] flex flex-col items-center justify-center p-10 opacity-60">
+                    <div className="h-full border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center justify-center p-10 opacity-60">
                       <span className="text-4xl mb-3">🛍️</span>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ยังไม่มีสินค้าในบิลนี้</p>
+                      <p className="text-[11px] font-semibold text-slate-400 ">ยังไม่มีสินค้าในบิลนี้</p>
                     </div>
                   ) : (
                     <>
@@ -1130,18 +1101,18 @@ const submitAddMore = async () => {
                       {existingItems?.map((item, i) => (
                         <div key={`existing-${item.id || i}`} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between opacity-60 grayscale-[0.5]">
                           <div className="flex items-center gap-4 overflow-hidden">
-                            <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-500 border border-slate-200 flex items-center justify-center font-black text-xs shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-500 border border-slate-200 flex items-center justify-center font-semibold text-xs shrink-0">
                               {i + 1}
                             </div>
                             <div className="overflow-hidden">
                               <div className="flex items-center gap-2">
-                                <h4 className="font-black text-slate-600 text-sm truncate uppercase tracking-tight">{item.name || item.Product_Name}</h4>
-                                <span className="text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">On Bill</span>
+                                <h4 className="font-semibold text-slate-600 text-sm truncate tracking-tight">{item.name || item.Product_Name}</h4>
+                                <span className="text-[11px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-semibold ">On Bill</span>
                               </div>
-                              <p className="text-[9px] font-bold text-slate-400 uppercase">ID: {item.id || item.Product_ID} | รายการเดิมในระบบ</p>
+                              <p className="text-[11px] font-bold text-slate-400 ">ID: {item.id || item.Product_ID} | รายการเดิมในระบบ</p>
                             </div>
                           </div>
-                          <div className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black text-slate-400 italic">LOCKED</div>
+                          <div className="px-3 py-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-400 ">LOCKED</div>
                         </div>
                       ))}
 
@@ -1149,12 +1120,12 @@ const submitAddMore = async () => {
                       {items.map((item, i) => (
                         <div key={item.tempId || `new-${i}`} className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100 flex items-center justify-between group animate-in slide-in-from-right-4 duration-300">
                           <div className="flex items-center gap-4 overflow-hidden">
-                            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-lg shadow-blue-100">
+                            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-semibold text-xs shrink-0 shadow-sm">
                               {(existingItems?.length || 0) + i + 1}
                             </div>
                             <div className="overflow-hidden">
-                              <h4 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{item.name}</h4>
-                              <p className="text-[9px] font-bold text-blue-500 uppercase">ID: {item.id} | Stock: {item.storeQty}/{item.warehouseQty}</p>
+                              <h4 className="font-semibold text-slate-800 text-sm truncate tracking-tight">{item.name}</h4>
+                              <p className="text-[11px] font-bold text-blue-500 ">ID: {item.id} | Stock: {item.storeQty}/{item.warehouseQty}</p>
                             </div>
                           </div>
                           <button 
@@ -1174,7 +1145,7 @@ const submitAddMore = async () => {
                   <button 
                     onClick={submitBatch} 
                     disabled={items.length === 0 || !batchName || isSubmitting}
-                    className={`w-full py-7 rounded-4xl font-black uppercase text-xs tracking-[0.4em] shadow-xl transition-all active:scale-[0.98] ${
+                    className={`w-full py-7 rounded-2xl font-semibold  text-xs tracking-wide shadow-xl transition-all active:scale-[0.98] ${
                       items.length > 0 && !isSubmitting 
                         ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-200' 
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'

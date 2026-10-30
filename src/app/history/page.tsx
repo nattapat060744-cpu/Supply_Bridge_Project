@@ -149,335 +149,294 @@ export default function HistoryPage() {
   const totalPages=Math.max(1,Math.ceil(total/itemsPerPage));
   const paginatedItems=items;
   const statusLabels:Record<string,string>={ALL:'ทั้งหมด',PENDING:'รอจัดซื้อ',ORDERED:'สั่งซื้อแล้ว',COMPLETED:'รับสินค้าแล้ว',REJECTED:'ยกเลิก'};
+  const statusStyle:Record<string,{pill:string;dot:string}>={
+    COMPLETED:{pill:'bg-emerald-50 text-emerald-700 ring-emerald-200',dot:'bg-emerald-500'},
+    ORDERED:{pill:'bg-blue-50 text-blue-700 ring-blue-200',dot:'bg-blue-500'},
+    REJECTED:{pill:'bg-rose-50 text-rose-700 ring-rose-200',dot:'bg-rose-500'},
+    REJECT:{pill:'bg-rose-50 text-rose-700 ring-rose-200',dot:'bg-rose-500'},
+    PENDING:{pill:'bg-amber-50 text-amber-700 ring-amber-200',dot:'bg-amber-500'},
+  };
+  const hasNote=(v?:string|null)=>Boolean(v)&&v!=='-';
+  const filtersActive=filterStatus!=='ALL'||filterSupplier!=='ALL'||searchTerm.trim()!=='';
+  const clearFilters=()=>{setFilterStatus('ALL');setFilterSupplier('ALL');setSearchTerm('');setCurrentPage(1);};
 
- return (
-    <div className="app-shell font-sans text-slate-900">
-      {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
-        <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
-          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
-          กำลังโหลดหน้าที่ {currentPage}…
-        </div>
-      </div>}
-
-      <div className="app-container">
-        
-        {/* แผงควบคุม Filter & Sort */}
-        <div className="app-hero p-6 md:p-8 mb-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="page-kicker">Audit Trail</p>
-                <h1 className="page-title font-display">ประวัติรายการ</h1>
-              </div>
-              <button onClick={fetchHistory} className="primary-action bg-slate-950 text-white hover:bg-blue-700 shadow-lg shadow-slate-900/10">รีเฟรช</button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 w-full lg:max-w-5xl">
-              {/* ค้นหา */}
-              <input 
-                type="text" placeholder="ค้นหาชื่อสินค้า/กลุ่ม/Supplier..." value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="control-field p-3 rounded-xl font-bold text-sm"
-              />
-
-              {/* เลือก Supplier */}
-              <select 
-                aria-label="ผู้ขาย" value={filterSupplier} onChange={(e) => {
-                  setFilterSupplier(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="control-field p-3 rounded-xl font-bold text-sm cursor-pointer"
-              >
-                <option value="ALL">ทุก Supplier</option>
-                {supplierList.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-
-              {/* เรียงลำดับ */}
-              <select 
-                aria-label="เรียงลำดับ" value={sortOrder} onChange={(e) => {
-                  setSortOrder(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="control-field p-3 rounded-xl font-bold text-sm cursor-pointer"
-              >
-                <option value="NEWEST">ล่าสุด → เก่าสุด</option>
-                <option value="OLDEST">เก่าสุด → ล่าสุด</option>
-                <option value="NAME_ASC">ชื่อสินค้า (ก-ฮ)</option>
-                <option value="NAME_DESC">ชื่อสินค้า (ฮ-ก)</option>
-              </select>
-
-              {/* จำนวนต่อหน้า */}
-              <div className="flex items-center control-field p-3 rounded-xl gap-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase">Show:</span>
-                <select aria-label="จำนวนต่อหน้า" value={itemsPerPage} onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }} className="bg-transparent font-black text-sm outline-none w-full">
-                  <option value={20}>20 แถว</option>
-                  <option value={50}>50 แถว</option>
-                  <option value={100}>100 แถว</option>
-                  <option value={500}>500 แถว</option>
-                </select>
-              </div>
-            </div>
+  return (
+    <div className="app-shell">
+      {paging && (
+        <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex cursor-wait items-center justify-center bg-white/70 backdrop-blur-[2px]" aria-busy="true">
+          <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-semibold text-slate-800 shadow-xl">
+            <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-[var(--tone)]" />
+            กำลังโหลดหน้าที่ {currentPage}…
           </div>
         </div>
+      )}
 
+      <div className="app-container">
+        {/* หัวหน้า */}
+        <section className="app-hero mb-5 flex flex-col gap-5 p-6 pl-8 md:flex-row md:items-end md:justify-between md:p-8 md:pl-10">
+          <div>
+            <p className="page-kicker mb-3">Audit Trail</p>
+            <h1 className="page-title font-display">ประวัติรายการ</h1>
+            <p className="page-subtitle mt-2">ติดตามทุกรายการตั้งแต่สั่งซื้อจนรับสินค้า พร้อมหมายเหตุจากแต่ละแผนก</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="metric-tile px-5 py-3 text-center">
+              <p className="text-2xl font-bold leading-none">{total.toLocaleString('th-TH')}</p>
+              <p className="mt-1 text-xs font-medium">{filtersActive ? 'รายการที่ตรงกัน' : 'รายการทั้งหมด'}</p>
+            </div>
+            <button onClick={fetchHistory} disabled={loading} className="primary-action">
+              <svg className={loading ? 'animate-spin' : ''} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5" /></svg>
+              รีเฟรช
+            </button>
+          </div>
+        </section>
+
+        {/* แถบค้นหาและตัวกรอง */}
+        <section className="app-card mb-5 p-4 md:p-5">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_auto]">
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+              <input
+                type="search" aria-label="ค้นหา" placeholder="ค้นหาชื่อสินค้า, กลุ่ม หรือ Supplier" value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="control-field w-full py-3 pl-10 pr-4 text-sm"
+              />
+            </div>
+            <select aria-label="ผู้ขาย" value={filterSupplier} onChange={(e) => { setFilterSupplier(e.target.value); setCurrentPage(1); }} className="control-field cursor-pointer px-3 py-3 text-sm">
+              <option value="ALL">ทุก Supplier</option>
+              {supplierList.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select aria-label="เรียงลำดับ" value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setCurrentPage(1); }} className="control-field cursor-pointer px-3 py-3 text-sm">
+              <option value="NEWEST">ใหม่สุดก่อน</option>
+              <option value="OLDEST">เก่าสุดก่อน</option>
+              <option value="NAME_ASC">ชื่อสินค้า ก-ฮ</option>
+              <option value="NAME_DESC">ชื่อสินค้า ฮ-ก</option>
+            </select>
+            <select aria-label="จำนวนต่อหน้า" value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="control-field cursor-pointer px-3 py-3 text-sm">
+              <option value={20}>20 แถว</option>
+              <option value={50}>50 แถว</option>
+              <option value={100}>100 แถว</option>
+              <option value={500}>500 แถว</option>
+            </select>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex flex-1 gap-2 overflow-x-auto pb-1 custom-scrollbar-h" role="group" aria-label="กรองตามสถานะ">
+              {['ALL', 'PENDING', 'ORDERED', 'COMPLETED', 'REJECTED'].map((s) => {
+                const on = filterStatus === s;
+                return (
+                  <button
+                    key={s} aria-pressed={on}
+                    onClick={() => { setFilterStatus(s); setCurrentPage(1); }}
+                    className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                      on ? 'border-transparent bg-[var(--tone-ink)] text-white shadow-sm' : 'border-[var(--line-strong)] bg-white text-[var(--muted)] hover:border-[var(--tone)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    {s !== 'ALL' && <span className={`h-2 w-2 rounded-full ${statusStyle[s].dot}`} />}
+                    {statusLabels[s]}
+                  </button>
+                );
+              })}
+            </div>
+            {filtersActive && <button onClick={clearFilters} className="shrink-0 text-xs font-semibold text-[var(--muted)] underline underline-offset-4 hover:text-[var(--ink)]">ล้างตัวกรอง</button>}
+          </div>
+        </section>
+
+        {/* จัดการพื้นที่ข้อมูล (ผู้ดูแลระบบ) */}
         {isAdmin && (
-          <div className="app-card mb-8 p-4 md:p-5">
-            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <details className="app-card group mb-5 overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 md:px-5">
               <div>
-                <p className="page-kicker text-slate-500">จัดการพื้นที่ข้อมูล</p>
-                <h2 className="text-lg font-black text-slate-950">เก็บรายการที่จบแล้วเข้าคลัง</h2>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  ตรวจสอบจำนวนก่อนย้าย รายการที่เก็บเข้าคลังแล้วยังค้นหาได้ในหน้าประวัติ
-                </p>
+                <p className="font-semibold text-[var(--ink)]">เก็บรายการที่จบแล้วเข้าคลัง</p>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">ตรวจสอบจำนวนก่อนย้าย รายการที่เก็บแล้วยังค้นหาได้ในหน้านี้</p>
               </div>
-
+              <span className="text-slate-400 transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="border-t border-[var(--line)] p-4 md:p-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
-                  aria-label="อายุรายการเก็บเข้าคลัง" value={archiveDays}
-                  onChange={(e) => {setArchiveDays(Number(e.target.value));setArchiveSummary(null);setArchiveMessage('');}}
-                  className="control-field rounded-xl p-3 text-sm font-bold"
-                  disabled={archiveLoading}
+                  aria-label="อายุรายการเก็บเข้าคลัง" value={archiveDays} disabled={archiveLoading}
+                  onChange={(e) => { setArchiveDays(Number(e.target.value)); setArchiveSummary(null); setArchiveMessage(''); }}
+                  className="control-field px-3 py-2.5 text-sm"
                 >
                   <option value={90}>เก่ากว่า 90 วัน</option>
                   <option value={180}>เก่ากว่า 180 วัน</option>
                   <option value={365}>เก่ากว่า 365 วัน</option>
                 </select>
-                <button
-                  type="button"
-                  onClick={previewArchive}
-                  disabled={archiveLoading}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                  ตรวจสอบ
-                </button>
-                <button
-                  type="button"
-                  onClick={runArchive}
-                  disabled={archiveLoading || !archiveSummary || archiveSummary.eligibleCount === 0}
-                  className="rounded-xl bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:opacity-50"
-                >
-                  ย้ายเข้าคลัง
-                </button>
+                <button type="button" onClick={previewArchive} disabled={archiveLoading} className="secondary-action">ตรวจสอบก่อน</button>
+                <button type="button" onClick={runArchive} disabled={archiveLoading || !archiveSummary || archiveSummary.eligibleCount === 0} className="primary-action">ย้ายเข้าคลัง</button>
               </div>
+              {(archiveMessage || archiveSummary) && (
+                <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
+                  {archiveMessage && <p className="font-semibold text-[var(--ink)]">{archiveMessage}</p>}
+                  {archiveSummary && (
+                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                      <div><p className="text-xs">แถวทั้งหมด</p><p className="text-lg font-bold tabular-nums text-[var(--ink)]">{archiveSummary.totalRows}</p></div>
+                      <div><p className="text-xs">พร้อมย้าย</p><p className="text-lg font-bold tabular-nums text-[var(--tone-ink)]">{archiveSummary.eligibleCount}</p></div>
+                      <div><p className="text-xs">ย้ายแล้ว</p><p className="text-lg font-bold tabular-nums text-[var(--ink)]">{archiveSummary.archivedCount || 0}</p></div>
+                      {Object.entries(archiveSummary.archiveSheets || {}).map(([sheet, count]) => (
+                        <p key={sheet} className="text-xs sm:col-span-3">{sheet}: {count} รายการ</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+          </details>
+        )}
 
-            {(archiveMessage || archiveSummary) && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">
-                {archiveMessage && <p>{archiveMessage}</p>}
-                {archiveSummary && (
-                  <div className="mt-2 grid gap-2 md:grid-cols-3">
-                    <div>แถวทั้งหมด: {archiveSummary.totalRows}</div>
-                    <div>พร้อมย้าย: {archiveSummary.eligibleCount}</div>
-                    <div>ย้ายแล้ว: {archiveSummary.archivedCount || 0}</div>
-                    {Object.entries(archiveSummary.archiveSheets || {}).map(([sheet, count]) => (
-                      <div key={sheet} className="md:col-span-3 text-slate-500">
-                        {sheet}: {count} รายการ
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+        {error && (
+          <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            <span className="flex-1">{error}</span>
+            <button onClick={fetchHistory} className="font-semibold underline underline-offset-2">ลองอีกครั้ง</button>
           </div>
         )}
-        
-        
-        {/* แถบ Filter สถานะ */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-          {['ALL', 'PENDING', 'ORDERED', 'COMPLETED', 'REJECTED'].map(s => (
-            <button
-              key={s} onClick={() => {
-                setFilterStatus(s);
-                setCurrentPage(1);
-              }}
-              className={`px-6 py-2 rounded-full font-black text-[11px] tracking-widest transition-all ${
-                filterStatus === s ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'
-              }`}
-            >
-              {statusLabels[s]}
-            </button>
-            
-          ))}
-        </div>
 
-        {error&&<div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{error} <button onClick={fetchHistory} className="underline">ลองอีกครั้ง</button></div>}
-        {loading&&items.length>0&&<p role="status" className="mb-3 text-sm text-slate-500">กำลังโหลดรายการ...</p>}
-        {/* ตารางข้อมูล */}
-        <div className="app-card overflow-hidden mb-6">
-          <div className="overflow-x-auto">
-            {loading && items.length===0 ? (
-              <div className="p-20 text-center font-black text-slate-300 animate-pulse uppercase tracking-[0.18em]">กำลังดึงข้อมูลล่าสุด...</div>
-            ) : (
-              <table aria-busy={loading} className="w-full min-w-[1100px] text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-500 font-black uppercase text-[10px] tracking-[0.12em] border-b">
+        {/* ตาราง */}
+        <section className="app-card mb-6 overflow-hidden">
+          <div className="overflow-x-auto custom-scrollbar-h">
+            <table aria-busy={loading} className="w-full min-w-[1040px] border-collapse text-left">
+              <thead className="bg-[var(--surface-2)] text-xs font-semibold text-[var(--muted)]">
+                <tr className="border-b border-[var(--line)]">
+                  <th className="px-5 py-3.5">บิล / วันที่สั่ง</th>
+                  <th className="w-[28%] px-5 py-3.5">สินค้า</th>
+                  <th className="px-5 py-3.5 text-center">สั่ง</th>
+                  <th className="px-5 py-3.5 text-center">รับจริง</th>
+                  <th className="px-5 py-3.5">การรับสินค้า</th>
+                  <th className="px-5 py-3.5">หมายเหตุ</th>
+                  <th className="px-5 py-3.5 text-center">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {loading && items.length === 0 &&
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={`sk-${i}`}>
+                      <td className="px-5 py-5"><div className="skeleton mb-2 h-4 w-28" /><div className="skeleton h-5 w-20" /></td>
+                      <td className="px-5 py-5"><div className="skeleton mb-2 h-4 w-48" /><div className="skeleton h-3 w-24" /></td>
+                      <td className="px-5 py-5"><div className="skeleton mx-auto h-8 w-14" /></td>
+                      <td className="px-5 py-5"><div className="skeleton mx-auto h-8 w-14" /></td>
+                      <td className="px-5 py-5"><div className="skeleton h-4 w-28" /></td>
+                      <td className="px-5 py-5"><div className="skeleton h-4 w-32" /></td>
+                      <td className="px-5 py-5"><div className="skeleton mx-auto h-6 w-20 !rounded-full" /></td>
+                    </tr>
+                  ))}
+
+                {paginatedItems.map((item) => {
+                  const st = statusStyle[item.status] || statusStyle.PENDING;
+                  const diff = Number(item.recvCarton || 0) - Number(item.orderCarton || 0);
+                  const received = Number(item.recvCarton || 0) > 0;
+                  const noteList = [
+                    { k: 'ธุรการ', v: item.noteRequest, c: 'border-blue-400 bg-blue-50 text-blue-800' },
+                    { k: 'จัดซื้อ', v: item.notePurchase, c: 'border-emerald-400 bg-emerald-50 text-emerald-800' },
+                    { k: 'สต็อก', v: item.noteStock, c: 'border-amber-400 bg-amber-50 text-amber-800' },
+                  ].filter((n) => hasNote(n.v));
+                  return (
+                    <tr key={item.rowUid} className="transition-colors hover:bg-[var(--surface-2)]">
+                      <td className="px-5 py-4 align-top">
+                        <time dateTime={item.createdAt} className="block whitespace-nowrap text-sm font-semibold text-[var(--ink)]">{formatBusinessDate(item.createdAt)}</time>
+                        <span className="mt-1.5 inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{item.groupId}</span>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <p className="font-semibold leading-snug text-[var(--ink)]">{item.productName}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{item.supplier}</p>
+                      </td>
+                      <td className="px-5 py-4 text-center align-top">
+                        <p className="text-xl font-bold tabular-nums text-[var(--ink)]">{item.orderCarton} <span className="text-xs font-medium text-slate-400">{item.cartonUnit}</span></p>
+                        <p className="mt-0.5 text-[11px] text-[var(--muted)]">บรรจุ {item.qtyPerCarton} {item.innerUnit}</p>
+                      </td>
+                      <td className="px-5 py-4 text-center align-top">
+                        {received ? (
+                          <>
+                            <p className="text-xl font-bold tabular-nums text-[var(--ink)]">{item.recvCarton} <span className="text-xs font-medium text-slate-400">{item.recvUnit}</span></p>
+                            <p className="mt-0.5 text-[11px] text-[var(--muted)]">บรรจุ {item.recvQty} {item.recvQtyUnit}</p>
+                            {diff !== 0 && (
+                              <span className={`mt-1.5 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${diff < 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                                {diff < 0 ? 'ขาด' : 'เกิน'} {Math.abs(diff)}
+                              </span>
+                            )}
+                          </>
+                        ) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-5 py-4 align-top text-xs">
+                        <dl className="space-y-1.5">
+                          <div><dt className="text-[11px] text-slate-400">วันที่รับ</dt><dd className="whitespace-nowrap text-[var(--ink)]">{item.recvDate ? formatBusinessDate(item.recvDate) : '-'}</dd></div>
+                          <div><dt className="text-[11px] text-slate-400">ผู้รับ</dt><dd className="font-medium text-[var(--ink)]">{item.receiver || '-'}</dd></div>
+                          <div><dt className="text-[11px] text-slate-400">เลขบิล / INV</dt><dd className={hasNote(item.invoiceNo) ? 'font-semibold text-[var(--tone-ink)]' : 'text-slate-400'}>{hasNote(item.invoiceNo) ? item.invoiceNo : 'ยังไม่ระบุ'}</dd></div>
+                        </dl>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        {noteList.length === 0 ? (
+                          <span className="text-xs text-slate-300">ไม่มีหมายเหตุ</span>
+                        ) : (
+                          <div className="flex max-w-[220px] flex-col gap-1.5">
+                            {noteList.map((n) => (
+                              <p key={n.k} className={`rounded-md border-l-[3px] px-2.5 py-1.5 text-xs leading-5 ${n.c}`}>
+                                <span className="mr-1 font-semibold">{n.k}:</span>{n.v}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-center align-top">
+                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ring-1 ${st.pill}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                          {statusLabels[item.status] || item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!loading && items.length === 0 && (
                   <tr>
-                    <th className="p-6 whitespace-nowrap">ข้อมูลบิล</th>
-                    <th className="p-6 w-1/3">รายการสินค้า/Supplier</th>
-                    <th className="p-6 text-center whitespace-nowrap">หมายเหตุ</th>
-                    <th className="p-6 text-center whitespace-nowrap">จำนวนสั่ง</th>
-                    <th className="p-6 text-center whitespace-nowrap">จำนวนรับ</th>
-                    <th className="p-6 text-center whitespace-nowrap">ข้อมูลการรับ</th>
-                    <th className="p-6 text-center">สถานะ</th>
+                    <td colSpan={7} className="px-5 py-16 text-center">
+                      <p className="font-semibold text-[var(--ink)]">ไม่พบรายการที่ตรงกับตัวกรอง</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">ลองเปลี่ยนคำค้นหาหรือสถานะ</p>
+                      {filtersActive && <button onClick={clearFilters} className="secondary-action mt-4">ล้างตัวกรองทั้งหมด</button>}
+                    </td>
                   </tr>
-                </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {paginatedItems.map((item) => (
-                      <tr key={item.rowUid} className="hover:bg-slate-50/70 transition-colors">
-                        {/* 1. ข้อมูลบิลและวันที่สั่ง */}
-                        <td className="p-6 align-top">
-                          <time dateTime={item.createdAt} className="block min-w-40 whitespace-nowrap font-bold text-slate-900 mb-2">{formatBusinessDate(item.createdAt)}</time>
-                          <div className="text-[10px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-md inline-block">{item.groupId}</div>
-                        </td>
-
-                        {/* 2. รายการสินค้า */}
-                        <td className="p-6 align-top">
-                          <div className="font-bold text-slate-800 text-base mb-1">{item.productName}</div>
-                          <div className="text-[11px] text-slate-400 font-bold italic">{item.supplier}</div>
-                        </td>
-
-                        {/* 3. หมายเหตุ (แสดงครบทุกแผนก) */}
-                        <td className="p-6 align-top">
-                          <div className="flex flex-col gap-2">
-                            {item.noteRequest && item.noteRequest !== '-' && (
-                              <div className="text-[10px] bg-amber-50 text-amber-700 p-2 rounded-lg border-l-2 border-amber-400 font-bold">
-                                <span className="text-[9px] opacity-60 block uppercase">Sorting:</span>
-                                {item.noteRequest}
-                              </div>
-                            )}
-                            {item.notePurchase && item.notePurchase !== '-' && (
-                              <div className="text-[10px] bg-blue-50 text-blue-700 p-2 rounded-lg border-l-2 border-blue-400 font-bold">
-                                <span className="text-[9px] opacity-60 block uppercase">Purchasing:</span>
-                                {item.notePurchase}
-                              </div>
-                            )}
-                            {item.noteStock && item.noteStock !== '-' && (
-                              <div className="text-[10px] bg-emerald-50 text-emerald-700 p-2 rounded-lg border-l-2 border-emerald-400 font-bold">
-                                <span className="text-[9px] opacity-60 block uppercase">Stock:</span>
-                                {item.noteStock}
-                              </div>
-                            )}
-                            {(!item.noteRequest || item.noteRequest === '-') && 
-                            (!item.notePurchase || item.notePurchase === '-') && 
-                            (!item.noteStock || item.noteStock === '-') && (
-                              <span className="text-slate-300 text-[10px] italic">- ไม่มีหมายเหตุ -</span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 4. ช่องสั่งซื้อ (เน้นจำนวนสั่ง) */}
-                        <td className="p-6 text-center bg-slate-50/50 align-top">
-                          <div className="flex flex-col items-center">
-                            <p className="text-2xl font-black text-slate-900 tracking-tighter">
-                              {item.orderCarton} <span className="text-[10px] text-slate-400 uppercase">{item.cartonUnit}</span>
-                            </p>
-                            <div className="w-12 h-0.5 bg-slate-200 my-1"></div>
-                            <p className="text-[10px] font-bold text-slate-500">
-                              บรรจุ {item.qtyPerCarton} {item.innerUnit}
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* 5. ช่องจำนวนรับ (เน้นยอดรับจริง) */}
-                        <td className="p-6 text-center bg-slate-50/50 align-top">
-                          <div className="flex flex-col items-center">
-                            <p className="text-2xl font-black text-slate-900 tracking-tighter">
-                              {item.recvCarton} <span className="text-[10px] text-slate-400 uppercase">{item.recvUnit}</span>
-                            </p>
-                            <div className="w-12 h-0.5 bg-slate-200 my-1"></div>
-                            <p className="text-[10px] font-bold text-slate-500">
-                              บรรจุ {item.recvQty} {item.recvQtyUnit}
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* 6. ช่องข้อมูลการรับ (แยกออกมาให้ดูง่ายตามที่พี่ชายบอก) */}
-                        <td className="p-6 align-top bg-slate-50/30">
-                          <div className="space-y-2">
-                            <div><span className="block text-[9px] font-bold text-slate-400">วันที่รับสินค้า</span><time className="whitespace-nowrap text-xs">{formatBusinessDate(item.recvDate)}</time></div>
-                            {/* ชื่อคนรับของ */}
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">ผู้รับของ</span>
-                              <span className="text-xs font-black text-slate-700">{item.receiver || '-'}</span>
-                            </div>
-                            {/* วันที่รับของ (ถ้ามีแยกใน DB) หรือ เลขบิล */}
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">เลขที่บิล / INV</span>
-                              <span className="text-[11px] font-bold text-blue-600">{item.invoiceNo && item.invoiceNo !== '-' ? item.invoiceNo : 'ยังไม่ระบุ'}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 7. สถานะ */}
-                        <td className="p-6 text-center align-top">
-                          <div className={`whitespace-nowrap px-3 py-1 rounded-md text-[10px] font-black shadow-sm inline-block ${
-                            item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' :
-                            item.status === 'ORDERED' ? 'bg-blue-600 text-white' : 
-                            item.status === 'REJECTED' || item.status === 'REJECT' ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-900'
-                          }`}>
-                            {statusLabels[item.status]||item.status}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {!loading&&items.length===0&&<tr><td colSpan={7} className="p-12 text-center text-slate-500">ไม่พบรายการที่ตรงกับตัวกรอง</td></tr>}
-                  </tbody>
-              </table>
-            )}
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
 
-        {/* Pagination Controls */}
+        {/* เปลี่ยนหน้า */}
         {totalPages > 1 && (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pb-10">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              หน้า {currentPage} / {totalPages} (ทั้งหมด {total} รายการ)
-            </div>
+          <div className="flex flex-col items-center justify-between gap-4 pb-6 md:flex-row">
+            <p className="text-sm text-[var(--muted)]">หน้า {currentPage} จาก {totalPages} · ทั้งหมด {total.toLocaleString('th-TH')} รายการ</p>
             <div className="flex items-center gap-2">
               <button
                 aria-label="หน้าก่อนหน้า" disabled={paging || loading || currentPage === 1}
-                onClick={() => {setPaging(true);setCurrentPage(prev => prev - 1);}}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
-                  currentPage === 1 ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
-                }`}
+                onClick={() => { setPaging(true); setCurrentPage((prev) => prev - 1); }}
+                className="secondary-action h-10 w-10 !p-0"
               >←</button>
-              
-              <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
+              <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-white p-1 shadow-sm">
                 {[...Array(totalPages)].map((_, i) => {
                   const pageNum = i + 1;
                   if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
+                    const on = currentPage === pageNum;
                     return (
                       <button
-                        key={pageNum}
-                        disabled={paging || loading || currentPage===pageNum}
-                        onClick={() => {setPaging(true);setCurrentPage(pageNum);}}
-                        className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${
-                          currentPage === pageNum ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'
-                        }`}
+                        key={pageNum} disabled={paging || loading || on} aria-current={on ? 'page' : undefined}
+                        onClick={() => { setPaging(true); setCurrentPage(pageNum); }}
+                        className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${on ? 'bg-[var(--tone-ink)] text-white' : 'text-[var(--muted)] hover:bg-slate-100'}`}
                       >{pageNum}</button>
                     );
                   }
-                  if (pageNum === currentPage - 2 || pageNum === currentPage + 2) return <span key={pageNum} className="text-slate-300">...</span>;
+                  if (pageNum === currentPage - 2 || pageNum === currentPage + 2) return <span key={pageNum} className="px-1 text-slate-300">…</span>;
                   return null;
                 })}
               </div>
-
               <button
                 aria-label="หน้าถัดไป" disabled={paging || loading || currentPage === totalPages}
-                onClick={() => {setPaging(true);setCurrentPage(prev => prev + 1);}}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl font-black transition-all ${
-                  currentPage === totalPages ? 'bg-slate-100 text-slate-300' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white'
-                }`}
+                onClick={() => { setPaging(true); setCurrentPage((prev) => prev + 1); }}
+                className="secondary-action h-10 w-10 !p-0"
               >→</button>
             </div>
           </div>
-           )}
-          </div>
-        </div>
+        )}
+      </div>
+    </div>
   );
 }

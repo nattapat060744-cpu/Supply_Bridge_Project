@@ -595,8 +595,8 @@ const handleBatchSubmit = async () => {
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-16 h-16 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin mb-4"></div>
-      <span className="font-black text-slate-400 uppercase tracking-[0.3em] text-[10px]">
+      <div className="w-16 h-16 border-4 border-slate-200 border-t-amber-400 rounded-full animate-spin mb-4"></div>
+      <span className="font-semibold text-slate-400 tracking-wide text-[11px]">
         กำลังตรวจสอบสิทธิ์และซิงค์ข้อมูลสต็อก...
       </span>
     </div>
@@ -832,134 +832,63 @@ const handleConfirmImport = async () => {
   };
 
   return (
+    <div className="app-shell">
       <div className="app-container">
       {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
         <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
-          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-[var(--tone)]" />
           กำลังโหลดหน้าที่ {currentPage}…
         </div>
       </div>}
 
         {workPage.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">{workPage.error}</p>}
         {/* ส่วนหัวข้อหลัก */}
-        <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-yellow-600">
-            <div className="relative z-10">
-              <span className="page-kicker text-yellow-700 mb-3 block">
-                Inventory Control System
-              </span>
-              <h1 className="page-title font-display">
-                รายการ <span className="text-yellow-600 not-italic">สต็อกสินค้า</span>
-              </h1>
-              <p className="page-subtitle mt-4 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                จัดการรายการสั่งซื้อและตรวจสอบสินค้าในระบบ
-              </p>
-            </div>
-            <button 
-              onClick={fetchPendingOrders}
-              className="primary-action bg-yellow-600 text-white shadow-lg shadow-yellow-600/15 hover:bg-slate-900 md:self-end"
-            >
-              <span className="text-2xl">🔄</span> รีเฟรชข้อมูล
-            </button>
-        </div>
+        <section className="app-hero mb-6 flex flex-col gap-5 p-6 pl-8 md:flex-row md:items-end md:justify-between md:p-8 md:pl-10">
+          <div>
+            <p className="page-kicker mb-3">Inventory</p>
+            <h1 className="page-title font-display">ตรวจรับสินค้าเข้าคลัง</h1>
+            <p className="page-subtitle mt-2">ตรวจยอดที่สั่งกับของที่มาถึงจริง แล้วลงรับเข้าสต็อก</p>
+          </div>
+          <button onClick={fetchPendingOrders} className="primary-action">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5" /></svg>
+            รีเฟรชข้อมูล
+          </button>
+        </section>
 
 {/* Phase 2: Action Bar (Modern & Functional) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-8 app-card p-4 md:p-5 transition-all">
-        
-        {/* 1. โซนค้นหา (ฝั่งซ้าย) */}
-        <div className="lg:col-span-5 flex flex-col gap-3">
-          <div className="flex items-center gap-3 ml-2">
-            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">ค้นหาข้อมูลสินค้าหรือเลขบิล</p>
-          </div>
-          
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-              <span className="text-xl text-slate-400">🔍</span>
-            </div>
-            <input 
-              type="text"
-              placeholder="รหัสสินค้า, ชื่อสินค้า หรือ เลขบิล..."
-              className="control-field w-full pl-14 pr-12 py-4 rounded-xl font-bold text-base placeholder:text-slate-300"
+      <section className="app-card mb-6 p-4 md:p-5">
+        <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".xlsx, .xls" className="hidden" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <svg className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input
+              type="search"
+              aria-label="ค้นหาสินค้าหรือเลขบิล"
+              placeholder="รหัสสินค้า, ชื่อสินค้า หรือเลขบิล"
+              className="control-field w-full py-3.5 pl-12 pr-4 text-base"
               value={searchTerm}
               onChange={(e) => {setSearchTerm(e.target.value);setCurrentPage(1);}}
             />
-            {searchTerm && (
-              <button 
-                onClick={() => {setSearchTerm('');setCurrentPage(1);}}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-lg transition-all border border-slate-100"
-              >
-                ✕
-              </button>
-            )}
           </div>
-        </div>
-
-        {/* 2. โซนตัวเลือก Supplier (ตรงกลาง) */}
-        <div className="lg:col-span-3 flex flex-col gap-3">
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">คัดกรองซัพพลายเออร์</p>
-          <div className="relative group h-full">
-            <select
-              value={selectedSupplier}
-              onChange={(e) => {setSelectedSupplier(e.target.value);setCurrentPage(1);}}
-              className="control-field w-full h-14 px-5 rounded-xl font-black text-slate-600 appearance-none cursor-pointer"
-            >
-              {suppliers.map((s) => (
-                <option key={s} value={s}>
-                  {s === 'all' ? '🏢 ทุกบริษัทในระบบ' : `🏬 ${s}`}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300 group-focus-within:text-yellow-500 transition-colors">
-              ▼
-            </div>
+          <select
+            aria-label="ซัพพลายเออร์"
+            value={selectedSupplier}
+            onChange={(e) => {setSelectedSupplier(e.target.value);setCurrentPage(1);}}
+            className="control-field cursor-pointer px-4 py-3.5 text-sm lg:w-60"
+          >
+            {suppliers.map((s) => (
+              <option key={s} value={s}>{s === 'all' ? 'ทุกซัพพลายเออร์' : s}</option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button onClick={() => fileInputRef.current?.click()} className="secondary-action flex-1 lg:flex-none">นำเข้า Excel</button>
+            <button onClick={() => setShowExportOptions(true)} className="secondary-action flex-1 lg:flex-none">ส่งออก</button>
           </div>
+          <button onClick={() => void openBulk()} disabled={auxLoading} className="primary-action">
+            ลงรับของหลายรายการ
+          </button>
         </div>
-
-        {/* 3. โซนปุ่ม Action (ฝั่งขวา) */}
-        <div className="lg:col-span-4 flex flex-col justify-end gap-3">
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            onChange={handleFileImport} 
-            accept=".xlsx, .xls" 
-            className="hidden" 
-          />
-          
-          <div className="flex flex-col gap-2">
-            {/* ปุ่มหลัก: ลงทะเบียนรับของ */}
-            <button 
-              onClick={() => void openBulk()}
-              disabled={auxLoading}
-              className="primary-action w-full bg-slate-900 text-yellow-300 hover:bg-yellow-500 hover:text-slate-950"
-            >
-              <span className="text-xl group-hover:scale-125 transition-transform">📦</span>
-              <span>ลงทะเบียนรับของหลายรายการ</span>
-              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            </button>
-
-            {/* กลุ่มปุ่มรอง: Import/Export */}
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-slate-200 bg-white py-3 text-[11px] font-bold uppercase text-slate-600 transition-all hover:border-blue-400 hover:text-blue-600 active:scale-95"
-              >
-                <span>📥</span>
-                <span>Import</span>
-              </button>
-
-              <button 
-                onClick={() => setShowExportOptions(true)}
-                className="rounded-lg border border-slate-200 bg-white py-3 text-[11px] font-bold uppercase text-slate-600 transition-all hover:border-emerald-500 hover:text-emerald-600 active:scale-95"
-              >
-                <span>📊</span>
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </div>
+      </section>
             
       <IssueTracking
         items={workPage.issues}
@@ -970,105 +899,76 @@ const handleConfirmImport = async () => {
 
 
 {/* Table Section: ปรับโฉมใหม่เป็น Modern Floating Card Style */}
-      <div className="w-full overflow-x-auto pb-10">
-        <table className="w-full border-separate border-spacing-y-4 px-2">
-          <thead className="bg-transparent text-slate-400 text-[11px] font-black uppercase tracking-[0.2em]">
-            <tr>
-              <th className="px-8 py-4 text-left">ข้อมูลสินค้า</th>
-              <th className="px-4 py-4 text-center">ซัพพลายเออร์</th>
-              <th className="px-4 py-4 text-center">ยอดรวมที่ต้องรับ</th>
-              <th className="px-4 py-4 text-center w-24"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayProducts.map(({ productInfo, batches, totalOrder }) => {
-              const pId = productInfo.productID;
-              const isExpanded = !!expandedBatches[pId];
+      <div className="space-y-3 pb-8">
+        {workPage.loading && displayProducts.length === 0 && [0, 1, 2].map((n) => (
+          <div key={n} className="app-card flex items-center gap-4 p-5" aria-busy="true">
+            <div className="skeleton h-16 w-16 !rounded-2xl" />
+            <div className="flex-1 space-y-2"><div className="skeleton h-4 w-20" /><div className="skeleton h-5 w-64" /></div>
+            <div className="skeleton h-10 w-24" />
+          </div>
+        ))}
 
-              return (
-                <React.Fragment key={pId}>
-                  {/* Main Product Row */}
-                  <tr 
-                    className={`group cursor-pointer transition-all duration-300 ${isExpanded ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
-                    onClick={() => toggleBatch(pId)}
-                  >
-                    {/* รายละเอียดสินค้า */}
-                    <td className={`bg-white p-6 rounded-l-[35px] border-y-2 border-l-2 transition-colors ${isExpanded ? 'border-yellow-400 bg-slate-50' : 'border-slate-100 group-hover:border-slate-200'}`}>
-                      <div className="flex items-center gap-6">
-                        <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center text-3xl shrink-0 shadow-inner border border-slate-100 overflow-hidden group-hover:rotate-3 transition-transform">
-                          {productInfo.imageUrl ? <img src={productInfo.imageUrl} className="w-full h-full object-cover" alt="" /> : "📦"}
+        {!workPage.loading && displayProducts.length === 0 && (
+          <div className="app-card px-6 py-16 text-center">
+            <p className="font-semibold text-[var(--ink)]">{searchTerm || selectedSupplier !== 'all' ? 'ไม่พบสินค้าที่ตรงกัน' : 'ไม่มีสินค้ารอตรวจรับ'}</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">{searchTerm || selectedSupplier !== 'all' ? 'ลองเปลี่ยนคำค้นหาหรือซัพพลายเออร์' : 'เมื่อจัดซื้อสั่งของแล้ว รายการจะมาแสดงที่นี่'}</p>
+            {(searchTerm || selectedSupplier !== 'all') && (
+              <button onClick={() => { setSearchTerm(''); setSelectedSupplier('all'); setCurrentPage(1); }} className="secondary-action mt-4">ล้างตัวกรอง</button>
+            )}
+          </div>
+        )}
+
+        {displayProducts.map(({ productInfo, batches, totalOrder }) => {
+          const pId = productInfo.productID;
+          const isExpanded = !!expandedBatches[pId];
+
+          return (
+            <div key={pId} className={`app-card overflow-hidden ${isExpanded ? 'ring-2 ring-[var(--tone)]/40' : ''}`}>
+              <div
+                role="button" tabIndex={0} aria-expanded={isExpanded}
+                onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleBatch(pId); } }}
+                onClick={() => toggleBatch(pId)}
+                className={`flex cursor-pointer items-center gap-4 p-4 transition-colors md:p-5 ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+              >
+                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[var(--line)] bg-slate-50 text-slate-300">
+                  {productInfo.imageUrl
+                    ? <img src={productInfo.imageUrl} className="h-full w-full object-cover" alt="" />
+                    : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5L12 12 3.5 7.5zM3.5 7.5V16L12 20.5 20.5 16V7.5M12 12v8.5" /></svg>}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-[var(--muted)]">รหัส {pId}</p>
+                  <h3 className="mt-0.5 text-base font-semibold leading-snug text-[var(--ink)] md:text-lg">{productInfo.productName}</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)] md:hidden">{productInfo.supplier || 'N/A'}</p>
+                </div>
+
+                <span className="hidden shrink-0 rounded-full border border-[var(--line)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--muted)] md:inline-block">
+                  {productInfo.supplier || 'N/A'}
+                </span>
+
+                <div className="shrink-0 rounded-xl bg-[var(--tone-soft)] px-4 py-2 text-center text-[var(--tone-ink)]">
+                  <p className="text-xl font-bold leading-none tabular-nums">{totalOrder} <span className="text-xs font-medium">{productInfo.cartonUnit}</span></p>
+                  <p className="mt-1 text-[11px] font-medium">{productInfo.qtyPerCarton} {productInfo.innerUnit}</p>
+                </div>
+
+                <svg aria-hidden="true" className={`shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[var(--tone-ink)]' : 'text-slate-300'}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              </div>
+
+              {isExpanded && (
+                <ul className="space-y-2 border-t border-[var(--line)] bg-[var(--surface-2)] p-3 md:p-4">
+                  {batches.map((batch: StockItem) => (
+                    <li key={batch.rowId} className="flex flex-col gap-4 rounded-xl border border-[var(--line)] bg-white p-4 md:flex-row md:items-center md:justify-between">
+                      <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
+                        <div><dt className="text-[11px] text-slate-400">กลุ่มบิล</dt><dd className="font-semibold text-[var(--ink)]">{batch.groupId}</dd></div>
+                        <div><dt className="text-[11px] text-slate-400">วันที่สั่ง</dt><dd className="text-[var(--ink)]">{batch.Created_At_P || '-'}</dd></div>
+                        <div className="col-span-2 md:col-span-1"><dt className="text-[11px] text-slate-400">Invoice</dt><dd className={batch.invoiceNo ? 'font-semibold text-[var(--tone-ink)]' : 'text-slate-400'}>{batch.invoiceNo || 'ยังไม่ระบุ'}</dd></div>
+                      </dl>
+                      <div className="flex items-center justify-between gap-5 md:justify-end">
+                        <div className="text-right">
+                          <p className="text-[11px] text-slate-400">ยอดบิลนี้</p>
+                          <p className="text-xl font-bold leading-none tabular-nums text-[var(--ink)]">{totalOrder} <span className="text-xs font-medium text-slate-400">{productInfo.cartonUnit}</span></p>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className="text-[10px] font-black bg-slate-900 text-white px-2 py-0.5 rounded-md tracking-tighter uppercase">ID: {pId}</span>
-                          </div>
-                          <h3 className="text-lg font-black text-slate-800 leading-tight uppercase tracking-tight group-hover:text-yellow-600 transition-colors">
-                            {productInfo.productName}
-                          </h3>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* ซัพพลายเออร์ */}
-                    <td className={`bg-white px-4 py-6 border-y-2 text-center transition-colors ${isExpanded ? 'border-yellow-400 bg-slate-50' : 'border-slate-100 group-hover:border-slate-200'}`}>
-                      <span className="px-4 py-2 rounded-full bg-blue-50 text-blue-600 text-[11px] font-black uppercase border border-blue-100 italic">
-                        {productInfo.supplier || 'N/A'}
-                      </span>
-                    </td>
-
-                    {/* สรุปยอดสั่ง */}
-                    <td className={`bg-white px-4 py-6 border-y-2 text-center transition-colors ${isExpanded ? 'border-yellow-400 bg-slate-50' : 'border-slate-100 group-hover:border-slate-200'}`}>
-                      <div className="inline-flex flex-col items-center bg-slate-50 px-6 py-2 rounded-2xl border border-slate-100 shadow-inner">
-                        <p className="text-2xl font-black text-slate-900 leading-none">
-                          {totalOrder} <span className="text-[11px] text-slate-400 font-bold uppercase">{productInfo.cartonUnit}</span>
-                        </p>
-                        <p className="text-[10px] font-bold text-amber-600 mt-1 uppercase tracking-tighter">
-                           {productInfo.qtyPerCarton} {productInfo.innerUnit}
-                        </p>
-                      </div>
-                    </td>
-
-                    {/* ปุ่มลูกศร */}
-                    <td className={`bg-white p-6 rounded-r-[35px] border-y-2 border-r-2 text-center transition-colors ${isExpanded ? 'border-yellow-400 bg-slate-50' : 'border-slate-100 group-hover:border-slate-200'}`}>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 ${isExpanded ? 'bg-yellow-400 text-slate-900 rotate-180 shadow-lg shadow-yellow-200' : 'bg-slate-50 text-slate-300'}`}>
-                        <span className="text-xl">▼</span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  {/* Expanded Batch Detail */}
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={4} className="px-4 pb-4 -mt-2">
-                        <div className="bg-slate-900 rounded-[35px] p-2 shadow-2xl animate-in slide-in-from-top-4 duration-300">
-                          <div className="bg-white/5 rounded-[28px] overflow-hidden">
-                            <div className="grid grid-cols-1">
-                              {batches.map((batch: StockItem) => (
-                                <div key={batch.rowId} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 border-b border-white/5 last:border-0 hover:bg-white/5 transition-all">
-                                  <div className="flex items-center gap-8 flex-1">
-                                    <div className="shrink-0">
-                                      <p className="text-[9px] font-black text-slate-500 uppercase mb-1 tracking-widest">BATCH GROUP</p>
-                                      <p className="text-sm font-black text-yellow-400">{batch.groupId}</p>
-                                      <p className="text-[10px] font-bold text-slate-400 mt-1">📅 วันที่สั่ง {batch.Created_At_P || '-'}</p>
-                                    </div>
-                                    <div className="h-10 w-px bg-white/10 hidden md:block"></div>
-                                    <div>
-                                      <p className="text-[9px] font-black text-slate-500 uppercase mb-1 italic">Invoice No.</p>
-                                      <p className="text-sm font-black text-white italic tracking-tight">{batch.invoiceNo || 'PENDING'}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-8">
-                                    <div className="text-right">
-                                      <p className="text-[9px] font-black text-slate-500 uppercase mb-1">ยอดบิลนี้</p>
-                                      <p className="text-2xl font-black text-amber-600 leading-none">
-                                        {totalOrder} <span className="text-[11px] text-slate-400 font-bold uppercase">{productInfo.cartonUnit}</span>
-                                      </p>
-                                      <p className="text-[10px] font-bold text-amber-600 mt-1 uppercase tracking-tighter">
-                                        {productInfo.qtyPerCarton} {productInfo.innerUnit}
-                                      </p>
-                                    </div>
-                                    <button 
+                        <button
                                       onClick={(e) => { 
                                         e.stopPropagation(); 
                                         
@@ -1077,84 +977,77 @@ const handleConfirmImport = async () => {
                                         
                                         // 2. ดีดหน้าต่างใบตรวจรับสินค้าขาเข้าอันเดิมขึ้นมาทำงานทันทีครับพี่ชาย!
                                         setSelectedBatch([batch]); 
-                                      }} 
-                                      className="group/btn relative bg-yellow-400 text-slate-950 px-8 py-4 rounded-[18px] text-[11px] font-black uppercase tracking-widest transition-all hover:bg-white active:scale-95 flex items-center gap-2" 
-                                    >
-                                      <span>📝 ตรวจรับสินค้า</span>
-                                      <span className="opacity-0 group-hover/btn:opacity-100 transition-opacity">→</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                                      }}
+                          className="primary-action"
+                        >
+                          ตรวจรับสินค้า
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-12 flex justify-center items-center gap-2 pb-10">
-            <button 
-              onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
-              disabled={paging || workPage.loading || currentPage === 1}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ← ก่อนหน้า
-            </button>
-            <div className="flex gap-1 items-center">
-              {(() => {
-                const pages = [];
-                const range = 1;
-                for (let i = 1; i <= totalPages; i++) {
-                  if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
-                    pages.push(
-                      <button
-                        key={i}
-                        disabled={paging || workPage.loading || currentPage===i}
-                        onClick={() => {setPaging(true);setCurrentPage(i);}}
-                        className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
-                      >
-                        {i}
-                      </button>
-                    );
-                  } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
-                    pages.push(<span key={i} className="px-2 text-slate-400">...</span>);
+          <div className="mt-6 flex flex-col items-center justify-between gap-4 pb-6 md:flex-row">
+            <p className="text-sm text-[var(--muted)]">หน้า {currentPage} จาก {totalPages}</p>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="หน้าก่อนหน้า"
+                onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
+                disabled={paging || workPage.loading || currentPage === 1}
+                className="secondary-action h-10 w-10 !p-0"
+              >←</button>
+              <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-white p-1 shadow-sm">
+                {(() => {
+                  const pages = [];
+                  const range = 1;
+                  for (let i = 1; i <= totalPages; i++) {
+                    if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+                      const on = currentPage === i;
+                      pages.push(
+                        <button
+                          key={i} aria-current={on ? 'page' : undefined}
+                          disabled={paging || workPage.loading || on}
+                          onClick={() => {setPaging(true);setCurrentPage(i);}}
+                          className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${on ? 'bg-[var(--tone-ink)] text-white' : 'text-[var(--muted)] hover:bg-slate-100'}`}
+                        >{i}</button>
+                      );
+                    } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
+                      pages.push(<span key={i} className="px-1 text-slate-300">…</span>);
+                    }
                   }
-                }
-                return pages;
-              })()}
+                  return pages;
+                })()}
+              </div>
+              <button
+                aria-label="หน้าถัดไป"
+                onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
+                disabled={paging || workPage.loading || currentPage === totalPages}
+                className="secondary-action h-10 w-10 !p-0"
+              >→</button>
             </div>
-            <button 
-              onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
-              disabled={paging || workPage.loading || currentPage === totalPages}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
-            >
-              ถัดไป →
-            </button>
           </div>
         )}
 
 {isBulkModalOpen && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-70 flex items-start justify-center p-2 sm:p-6 pt-10 sm:pt-20 overflow-y-auto">
-            <div className="bg-white w-full max-w-6xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-white/20 my-auto">
+            <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-white/20 my-auto">
               
               {/* Header */}
-              <div className="px-10 py-8 flex justify-between items-center bg-yellow-400 shrink-0">
+              <div className="px-10 py-8 flex justify-between items-center bg-amber-400 shrink-0">
                 <div className="flex items-center gap-5">
-                  <div className="bg-slate-900 text-yellow-400 w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-xl">
+                  <div className="bg-slate-900 text-amber-400 w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-xl">
                     📦
                   </div>
                   <div>
-                    <h2 className="font-black text-slate-900 text-2xl uppercase tracking-tighter leading-none">ลงทะเบียนรับของหลายรายการ</h2>
-                    <p className="text-slate-900/60 text-xs font-bold mt-2 uppercase tracking-[0.2em]">Bulk Stock-In Registration</p>
+                    <h2 className="font-semibold text-slate-900 text-2xl leading-none">ลงทะเบียนรับของหลายรายการ</h2>
+                    <p className="text-slate-900/60 text-xs font-bold mt-2 tracking-wide">Bulk Stock-In Registration</p>
                   </div>
                 </div>
                 <button 
@@ -1172,22 +1065,22 @@ const handleConfirmImport = async () => {
 
                     {/* Search Bar */}
                     <div className="flex flex-col gap-2 flex-1">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">ค้นหาสินค้าเพื่อเพิ่มเข้าลิสต์</label>
+                      <label className="text-[11px] font-semibold text-slate-400 ml-4">ค้นหาสินค้าเพื่อเพิ่มเข้าลิสต์</label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-                          <span className="text-slate-400 group-focus-within:text-yellow-500 transition-colors">🔍</span>
+                          <span className="text-slate-400 group-focus-within:text-amber-500 transition-colors">🔍</span>
                         </div>
                         <input 
                           type="text"
                           placeholder="พิมพ์ชื่อสินค้า, ID หรือ เลขบิล..."
-                          className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-[22px] outline-none focus:border-yellow-400 focus:bg-white font-bold text-base transition-all shadow-sm"
+                          className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-amber-400 focus:bg-white font-bold text-base transition-all shadow-sm"
                           value={innerSearch}
                           onChange={(e) => setInnerSearch(e.target.value)}
                         />
                         
                         {/* Search Results Dropdown */}
                         {innerSearch && (
-                          <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-200 rounded-[28px] shadow-2xl z-80 max-h-60 overflow-y-auto p-2">
+                          <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-200 rounded-xl shadow-2xl z-80 max-h-60 overflow-y-auto p-2">
                             {auxItems
                               .filter(i => {
                                 const matchSearch = i.productName.toLowerCase().includes(innerSearch.toLowerCase()) || i.productID.includes(innerSearch);
@@ -1208,13 +1101,13 @@ const handleConfirmImport = async () => {
                                     }
                                     setInnerSearch('');
                                   }}
-                                  className="p-4 hover:bg-yellow-50 rounded-[20px] cursor-pointer flex justify-between items-center transition-all group/item mb-1"
+                                  className="p-4 hover:bg-yellow-50 rounded-xl cursor-pointer flex justify-between items-center transition-all group/item mb-1"
                                 >
                                   <div className="flex flex-col">
-                                    <span className="font-black text-slate-700 text-sm">{item.productName}</span>
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase">ซัพ: {item.supplier} | บิล: {item.invoiceNo}</span>
+                                    <span className="font-semibold text-slate-700 text-sm">{item.productName}</span>
+                                    <span className="text-[11px] text-slate-400 font-bold ">ซัพ: {item.supplier} | บิล: {item.invoiceNo}</span>
                                   </div>
-                                  <span className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black opacity-0 group-hover/item:opacity-100 transition-all">+ เพิ่มรายการ</span>
+                                  <span className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[11px] font-semibold opacity-0 group-hover/item:opacity-100 transition-all">+ เพิ่มรายการ</span>
                                 </div>
                               ))}
                           </div>
@@ -1224,12 +1117,12 @@ const handleConfirmImport = async () => {
 
                     {/* Supplier Filter Dropdown */}
                     <div className="flex flex-col gap-2 min-w-60">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">คัดกรองซัพพลายเออร์</label>
+                      <label className="text-[11px] font-semibold text-slate-400 ml-4">คัดกรองซัพพลายเออร์</label>
                       <div className="relative">
                         <select 
                           value={selectedSupplier}
                           onChange={(e) => {setSelectedSupplier(e.target.value);setCurrentPage(1);}}
-                          className="w-full appearance-none pl-12 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-[22px] outline-none focus:border-yellow-400 focus:bg-white font-bold text-slate-700 transition-all shadow-sm cursor-pointer"
+                          className="w-full appearance-none pl-12 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-amber-400 focus:bg-white font-bold text-slate-700 transition-all shadow-sm cursor-pointer"
                         >
                           <option value="all">ทุกบริษัทในระบบ</option>
                           {[...new Set(auxItems.map(i => i.supplier))].filter(Boolean).map(sup => (
@@ -1251,7 +1144,7 @@ const handleConfirmImport = async () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-6">
                   <table className="w-full border-separate border-spacing-y-4">
                     <thead>
-                      <tr className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                      <tr className="text-[11px] font-semibold text-slate-400 tracking-wide">
                         <th className="text-left px-6 py-2">รายละเอียดสินค้า</th>
                         <th className="text-center px-4 py-2">ข้อมูลสั่งซื้อ</th>
                         <th className="text-center px-4 py-2">ยอดรับจริง (ลัง)</th>
@@ -1266,11 +1159,11 @@ const handleConfirmImport = async () => {
                         .filter(item => selectedSupplier === 'all' || item.supplier === selectedSupplier)
                         .map((item, idx) => (
                         <tr key={item.rowId} className="bg-white hover:shadow-xl transition-all group animate-in fade-in slide-in-from-bottom-2">
-                          <td className="px-6 py-5 rounded-l-[28px] border-y border-l border-slate-100">
+                          <td className="px-6 py-5 rounded-l-xl border-y border-l border-slate-100">
                             <div className="flex flex-col gap-2">
-                              <span className="font-black text-slate-900 text-[13px] line-clamp-1">{item.productName}</span>
+                              <span className="font-semibold text-slate-900 text-[13px] line-clamp-1">{item.productName}</span>
                               <div className="flex flex-wrap gap-2">
-                                <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-md uppercase border border-slate-200">
+                                <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
                                   SUP: {item.supplier}
                                 </span>
                               </div>
@@ -1278,8 +1171,8 @@ const handleConfirmImport = async () => {
                           </td>
                           <td className="px-4 py-5 border-y border-slate-100 text-center">
                             <div className="flex flex-col">
-                              <span className="text-xs font-black text-slate-700">{item.orderCarton} {item.cartonUnit}</span>
-                              <span className="text-[10px] font-bold text-slate-400">({item.qtyPerCarton} {item.innerUnit}/ลัง)</span>
+                              <span className="text-xs font-semibold text-slate-700">{item.orderCarton} {item.cartonUnit}</span>
+                              <span className="text-[11px] font-bold text-slate-400">({item.qtyPerCarton} {item.innerUnit}/ลัง)</span>
                             </div>
                           </td>
 
@@ -1287,7 +1180,7 @@ const handleConfirmImport = async () => {
                           <td className="px-4 py-5 border-y border-slate-100">
                             <input 
                               type="number"
-                              className="w-24 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-black text-sm focus:border-yellow-400 focus:bg-white outline-none transition-all shadow-inner"
+                              className="w-24 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-semibold text-sm focus:border-amber-400 focus:bg-white outline-none transition-all shadow-inner"
                               placeholder="ใส่จำนวน"
                               value={item.custom_carton ?? ''}
                               onChange={(e) => {
@@ -1303,7 +1196,7 @@ const handleConfirmImport = async () => {
                           <td className="px-4 py-5 border-y border-slate-100">
                             <input 
                               type="number"
-                              className="w-24 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-black text-sm focus:border-yellow-400 focus:bg-white outline-none transition-all shadow-inner"
+                              className="w-24 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-semibold text-sm focus:border-amber-400 focus:bg-white outline-none transition-all shadow-inner"
                               placeholder="ใส่จำนวน"
                               value={item.custom_qty ?? ''}
                               onChange={(e) => {
@@ -1319,7 +1212,7 @@ const handleConfirmImport = async () => {
                           <td className="px-4 py-5 border-y border-slate-100">
                             <input 
                               type="text"
-                              className="w-32 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-xs focus:border-yellow-400 focus:bg-white outline-none transition-all shadow-inner"
+                              className="w-32 mx-auto block text-center bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold text-xs focus:border-amber-400 focus:bg-white outline-none transition-all shadow-inner"
                               placeholder="เลขที่บิล"
                               value={item.custom_invoice ?? ''}
                               onChange={(e) => {
@@ -1335,7 +1228,7 @@ const handleConfirmImport = async () => {
                           <td className="px-4 py-5 border-y border-slate-100">
                             <input 
                               type="text"
-                              className="w-44 mx-auto block bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-medium text-xs focus:border-yellow-400 focus:bg-white outline-none transition-all shadow-inner"
+                              className="w-44 mx-auto block bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-medium text-xs focus:border-amber-400 focus:bg-white outline-none transition-all shadow-inner"
                               placeholder="เช่น ของแถม, ขาดส่ง..."
                               value={item.custom_note ?? ''}
                               onChange={(e) => {
@@ -1347,7 +1240,7 @@ const handleConfirmImport = async () => {
                             />
                           </td>
 
-                          <td className="px-4 py-5 rounded-r-[28px] border-y border-r border-slate-100 text-center">
+                          <td className="px-4 py-5 rounded-r-xl border-y border-r border-slate-100 text-center">
                             <button 
                               onClick={() => setBulkRecvList(bulkRecvList.filter(x => x.rowId !== item.rowId))}
                               className="w-10 h-10 flex items-center justify-center text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
@@ -1361,7 +1254,7 @@ const handleConfirmImport = async () => {
                   {bulkRecvList.length === 0 && (
                     <div className="py-32 text-center text-slate-300">
                       <div className="text-6xl mb-4 opacity-10">📥</div>
-                      <p className="font-black text-[10px] uppercase tracking-[0.4em]">ยังไม่ได้เลือกรายการ</p>
+                      <p className="font-semibold text-[11px] tracking-wide">ยังไม่ได้เลือกรายการ</p>
                     </div>
                   )}
                 </div>
@@ -1373,7 +1266,7 @@ const handleConfirmImport = async () => {
                     <input 
                       type="text" 
                       placeholder="ระบุชื่อผู้รับสินค้า..."
-                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-yellow-400 transition-all"
+                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-amber-400 transition-all"
                       value={receiverName}
                       onChange={(e) => setReceiverName(e.target.value)}
                     />
@@ -1404,11 +1297,11 @@ const handleConfirmImport = async () => {
                         setIsSubmitting(false);
                       }
                     }}
-                    className="px-10 py-4 bg-slate-900 text-white rounded-[22px] font-black text-sm hover:bg-slate-800 transition-all flex items-center gap-3 shadow-xl active:scale-95 disabled:opacity-30" 
+                    className="px-10 py-4 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-800 transition-all flex items-center gap-3 shadow-xl active:scale-95 disabled:opacity-30" 
                     disabled={!bulkRecvList.some(item=>selectedSupplier==='all'||item.supplier===selectedSupplier) || isSubmitting || !receiverName.trim()}
                   >
                     {isSubmitting ? 'กำลังบันทึกทั้งชุด...' : 'บันทึกชุดที่แสดง'}
-                    <span className="bg-yellow-400 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">{bulkRecvList.filter(item=>selectedSupplier==='all'||item.supplier===selectedSupplier).length}</span>
+                    <span className="bg-amber-400 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center text-[11px]">{bulkRecvList.filter(item=>selectedSupplier==='all'||item.supplier===selectedSupplier).length}</span>
                   </button>
                 </div>
               </div>
@@ -1420,30 +1313,30 @@ const handleConfirmImport = async () => {
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setSelectedBatch(null)}></div>
           
-          <div className="relative bg-white w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-[40px] shadow-2xl flex flex-col border border-slate-200">
+          <div className="relative bg-white w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl flex flex-col border border-slate-200">
             
             <div className="p-8 border-b border-slate-100 bg-linear-to-r from-white to-slate-50 flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="text-center md:text-left">
                 <div className="flex items-center gap-2 mb-2 justify-center md:justify-start">
-                  <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest italic shadow-lg">
+                  <span className="bg-slate-900 text-white text-[11px] font-semibold px-4 py-1.5 rounded-full shadow-lg">
                     บิลกลุ่ม: {selectedBatch[0].groupId}
                   </span>
-                  <span className="bg-yellow-100 text-yellow-700 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border border-yellow-200">
+                  <span className="bg-yellow-100 text-amber-700 text-[11px] font-semibold px-4 py-1.5 rounded-full border border-yellow-200">
                     สินค้านำเข้า
                   </span>
                 </div>
-                <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-                  ใบตรวจรับ <span className="text-yellow-500">สินค้าขาเข้า</span>
+                <h2 className="text-3xl font-semibold text-slate-900 ">
+                  ใบตรวจรับ <span className="text-amber-500">สินค้าขาเข้า</span>
                 </h2>
               </div>
 
               <div className="w-full md:w-80">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">
+                <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block ml-1">
                   ชื่อผู้ตรวจรับสินค้า ()
                 </label>
                 <div className="relative">
                   <input
-                    className="w-full bg-white border-2 border-slate-200 p-4 rounded-2xl font-black outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-100 transition-all text-sm pl-12"
+                    className="w-full bg-white border-2 border-slate-200 p-4 rounded-2xl font-semibold outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-100 transition-all text-sm pl-12"
                     placeholder="ระบุชื่อผู้รับผิดชอบ..."
                     value={receiverName}
                     onChange={(e) => setReceiverName(e.target.value)}
@@ -1454,11 +1347,11 @@ const handleConfirmImport = async () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/30 custom-scrollbar">
-              <div className="bg-white rounded-4xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest sticky top-0 z-10">
+                  <thead className="bg-slate-900 text-white text-[11px] font-semibold sticky top-0 z-10">
                     <tr>
-                      <th className="p-5 italic w-1/3">รายการสินค้า</th>
+                      <th className="p-5 w-1/3">รายการสินค้า</th>
                       <th className="p-5 text-center bg-slate-800">ยอดสั่ง</th>
                       <th className="p-5 text-center bg-slate-800">ยอดเศษเดิม</th>
                       <th className="p-5 text-center border-l border-slate-700">จำนวนลัง</th>
@@ -1470,22 +1363,22 @@ const handleConfirmImport = async () => {
                     {selectedBatch.map((item, idx) => (
                       <tr key={item.rowId || idx} className="hover:bg-slate-50/80 transition-colors group">
                         <td className="p-5">
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mb-0.5">รหัสสินค้า: {item.productID}</p>
-                          <p className="font-black text-slate-800 uppercase italic leading-tight">{item.productName}</p>
-                          <p className="text-[10px] text-slate-400 mt-1 font-medium">{item.supplier}</p>
+                          <p className="text-[11px] font-bold text-slate-400 tracking-tight mb-0.5">รหัสสินค้า: {item.productID}</p>
+                          <p className="font-semibold text-slate-800 leading-tight">{item.productName}</p>
+                          <p className="text-[11px] text-slate-400 mt-1 font-medium">{item.supplier}</p>
                         </td>
 
                         <td className="p-5 text-center bg-slate-50/50">
                           <div className="flex flex-col items-center">
-                            <span className="text-lg font-black text-slate-700">{item.orderCarton}</span>
-                            <span className="text-[9px] text-slate-400 uppercase">{item.cartonUnit}</span>
+                            <span className="text-lg font-semibold text-slate-700">{item.orderCarton}</span>
+                            <span className="text-[11px] text-slate-400 ">{item.cartonUnit}</span>
                           </div>
                         </td>
 
                         <td className="p-5 text-center bg-slate-50/50">
                           <div className="flex flex-col items-center">
-                            <span className="text-lg font-black text-slate-700">{item.qtyPerCarton}</span>
-                            <span className="text-[9px] text-slate-400 uppercase">{item.innerUnit}</span>
+                            <span className="text-lg font-semibold text-slate-700">{item.qtyPerCarton}</span>
+                            <span className="text-[11px] text-slate-400 ">{item.innerUnit}</span>
                           </div>
                         </td>
 
@@ -1493,7 +1386,7 @@ const handleConfirmImport = async () => {
                           <div className="flex flex-col items-center gap-1">
                             <input
                               type="number"
-                              className="w-24 bg-white border-2 border-slate-200 p-3 rounded-2xl font-black text-center text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm group-hover:border-slate-300"
+                              className="w-24 bg-white border-2 border-slate-200 p-3 rounded-2xl font-semibold text-center text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm group-hover:border-slate-300"
                               placeholder="0"
                               value={item.recvCarton || ''}
                               onChange={(e) => {
@@ -1502,7 +1395,7 @@ const handleConfirmImport = async () => {
                                 setSelectedBatch(newBatch);
                               }}
                             />
-                            <span className="text-[9px] text-slate-400 uppercase font-black">{item.cartonUnit}</span>
+                            <span className="text-[11px] text-slate-400 font-semibold">{item.cartonUnit}</span>
                           </div>
                         </td>
 
@@ -1510,7 +1403,7 @@ const handleConfirmImport = async () => {
                           <div className="flex flex-col items-center gap-1">
                             <input
                               type="number"
-                              className="w-20 bg-white border-2 border-slate-200 p-3 rounded-2xl font-black text-center text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm"
+                              className="w-20 bg-white border-2 border-slate-200 p-3 rounded-2xl font-semibold text-center text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm"
                               placeholder="0"
                               value={item.Recv_Qty || ''}
                               onChange={(e) => {
@@ -1519,14 +1412,14 @@ const handleConfirmImport = async () => {
                                 setSelectedBatch(newBatch);
                               }}
                             />
-                            <span className="text-[9px] text-slate-400 uppercase font-black">{item.innerUnit}</span>
+                            <span className="text-[11px] text-slate-400 font-semibold">{item.innerUnit}</span>
                           </div>
                         </td>
 
                         <td className="p-5">
                           <textarea
                             rows={1}
-                            className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-xs text-slate-600 outline-none focus:border-yellow-400 focus:bg-white transition-all resize-none"
+                            className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-xs text-slate-600 outline-none focus:border-amber-400 focus:bg-white transition-all resize-none"
                             placeholder="ระบุปัญหาหรือข้อความ..."
                             value={item.Note_Stock || ''}
                             onChange={(e) => {
@@ -1546,7 +1439,7 @@ const handleConfirmImport = async () => {
             <div className="p-6 md:p-8 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${selectedBatch.every(i => Number(i.recvCarton) === Number(i.orderCarton)) ? 'bg-green-500' : 'bg-orange-500 animate-pulse'}`}></div>
-                <span className="font-black text-[11px] uppercase italic text-slate-900 tracking-wider">
+                <span className="font-semibold text-[11px] text-slate-900 tracking-wider">
                   รายการที่ไม่ตรง: <span className="text-orange-500 text-lg">{selectedBatch.filter(i => Number(i.recvCarton) !== Number(i.orderCarton)).length}</span> รายการ
                 </span>
               </div>
@@ -1554,8 +1447,8 @@ const handleConfirmImport = async () => {
                 <button
                   onClick={handleBatchSubmit}
                   disabled={isSubmitting}
-                  className={`w-full md:px-16 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
-                    isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 shadow-yellow-400/20'
+                  className={`w-full md:px-16 py-4 rounded-2xl font-semibold text-[11px]   transition-all shadow-xl active:scale-95 ${
+                    isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-amber-400 hover:bg-amber-400 hover:text-slate-950 shadow-amber-400/20'
                   }`}
                 >
                   {isSubmitting ? 'กำลังบันทึก...' : 'ยืนยันการรับสินค้า 🚀'}
@@ -1563,7 +1456,7 @@ const handleConfirmImport = async () => {
                 <button
                   onClick={() => setSelectedBatch(null)}
                   disabled={isSubmitting}
-                  className="px-8 py-3 font-black text-[10px] uppercase text-slate-400 hover:text-red-500 transition-all"
+                  className="px-8 py-3 font-semibold text-[11px] text-slate-400 hover:text-red-500 transition-all"
                 >
                   ยกเลิก
                 </button>
@@ -1575,19 +1468,19 @@ const handleConfirmImport = async () => {
 
       {showExportOptions && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-110 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-4xl p-8 shadow-2xl flex flex-col max-h-[85vh]">
-            <h3 className="text-xl font-black text-slate-900 mb-2 flex items-center gap-2">
+          <div className="bg-white w-full max-w-lg rounded-2xl p-8 shadow-2xl flex flex-col max-h-[85vh]">
+            <h3 className="text-xl font-semibold text-slate-900 mb-2 flex items-center gap-2">
               <span>📊</span> เลือกซัพพลายเออร์
             </h3>
             
             {/* 1. ส่วนแสดงรายการที่เลือกแล้ว (จะแสดงเมื่อมีการเลือกอย่างน้อย 1 รายการ) */}
             {exportSuppliers.length > 0 && (
               <div className="mb-4">
-                <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">เลือกแล้ว {exportSuppliers.length} รายการ:</div>
+                <div className="text-[11px] font-semibold text-emerald-600 mb-2">เลือกแล้ว {exportSuppliers.length} รายการ:</div>
                 <div className="flex flex-wrap gap-2 max-h-25 overflow-y-auto p-2 bg-emerald-50 rounded-2xl custom-scrollbar">
                   {exportSuppliers.map(s => (
                     <div key={s} className="flex items-center gap-1 bg-white border border-emerald-200 px-3 py-1 rounded-full shadow-sm">
-                      <span className="text-[11px] font-black text-slate-700">{s}</span>
+                      <span className="text-[11px] font-semibold text-slate-700">{s}</span>
                       <button 
                         onClick={() => setExportSuppliers(exportSuppliers.filter(item => item !== s))}
                         className="text-emerald-500 hover:text-red-500 font-bold ml-1"
@@ -1605,7 +1498,7 @@ const handleConfirmImport = async () => {
               <input 
                 type="text"
                 placeholder="ค้นหาชื่อบริษัท..."
-                className="w-full bg-slate-100 p-4 pl-12 rounded-2xl font-black text-sm outline-none border-2 border-transparent focus:border-emerald-500 transition-all"
+                className="w-full bg-slate-100 p-4 pl-12 rounded-2xl font-semibold text-sm outline-none border-2 border-transparent focus:border-emerald-500 transition-all"
                 value={supplierSearch}
                 onChange={(e) => setSupplierSearch(e.target.value)}
               />
@@ -1620,13 +1513,13 @@ const handleConfirmImport = async () => {
                     .filter(s => s && s.toLowerCase().includes(supplierSearch.toLowerCase())) as string[];
                   setExportSuppliers(Array.from(new Set([...exportSuppliers, ...currentVisible])));
                 }}
-                className="text-[9px] font-black uppercase tracking-widest px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600"
+                className="text-[11px] font-semibold px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600"
               >
                 เลือกทั้งหมดที่เห็น
               </button>
               <button 
                 onClick={() => setExportSuppliers([])}
-                className="text-[9px] font-black uppercase tracking-widest px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600"
+                className="text-[11px] font-semibold px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600"
               >
                 ล้างค่าทั้งหมด
               </button>
@@ -1648,16 +1541,16 @@ const handleConfirmImport = async () => {
                         else setExportSuppliers(exportSuppliers.filter(item => item !== s));
                       }}
                     />
-                    <span className="font-black text-slate-700 text-sm">{s}</span>
+                    <span className="font-semibold text-slate-700 text-sm">{s}</span>
                   </label>
                 ))}
             </div>
 
             <div className="flex gap-3 pt-4 border-t-2 border-slate-50">
-              <button onClick={() => setShowExportOptions(false)} className="flex-1 py-4 font-black text-[10px] uppercase text-slate-400">ยกเลิก</button>
+              <button onClick={() => setShowExportOptions(false)} className="flex-1 py-4 font-semibold text-[11px] text-slate-400">ยกเลิก</button>
               <button 
                 onClick={handleFinalExport}
-                className="flex-2 bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                className="flex-2 bg-emerald-600 text-white py-4 rounded-2xl font-semibold text-[11px] hover:bg-emerald-700 transition-all shadow-sm"
               >
                 ดาวน์โหลด {exportSuppliers.length} บริษัท
               </button>
@@ -1668,12 +1561,12 @@ const handleConfirmImport = async () => {
 
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-150 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-7xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] scale-in-center">
+          <div className="bg-white w-full max-w-7xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] scale-in-center">
             
             {/* Header */}
             <div className="p-8 border-b-2 border-slate-50 flex justify-between items-center bg-slate-50/50">
               <div>
-                <h3 className="text-2xl font-black text-slate-950 uppercase tracking-tighter">ตรวจสอบการรับสินค้า (Stock Inbound)</h3>
+                <h3 className="text-2xl font-semibold text-slate-950 ">ตรวจสอบการรับสินค้า (Stock Inbound)</h3>
                 <p className="text-slate-400 font-bold text-sm">ตรวจพบข้อมูลในไฟล์ทั้งหมด {importData.length} รายการ</p>
               </div>
               <button onClick={() => setShowImportModal(false)} className="bg-white w-12 h-12 rounded-full shadow-sm flex items-center justify-center text-slate-300 hover:text-red-500 transition-all border border-slate-100">✕</button>
@@ -1683,12 +1576,12 @@ const handleConfirmImport = async () => {
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
               <table className="w-full text-left border-separate border-spacing-y-2">
                 <thead>
-                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                  <tr className="text-[11px] font-semibold text-slate-400 tracking-wide">
                     <th className="pb-4 pl-6">ID / รายการสินค้า</th>
                     <th className="pb-4 text-center">ยอดสั่งซื้อ (กล่อง)</th>
                     <th className="pb-4 text-center">บรรจุ/กล่อง</th>
-                    <th className="pb-4 text-center bg-blue-50 text-blue-600 rounded-t-2xl border-x border-t border-blue-100 uppercase">รับจริง (กล่อง)</th>
-                    <th className="pb-4 text-center bg-blue-50 text-blue-600 rounded-t-2xl border-r border-t border-blue-100 uppercase">รับจริง (ชิ้น)</th>
+                    <th className="pb-4 text-center bg-blue-50 text-blue-600 rounded-t-2xl border-x border-t border-blue-100 ">รับจริง (กล่อง)</th>
+                    <th className="pb-4 text-center bg-blue-50 text-blue-600 rounded-t-2xl border-r border-t border-blue-100 ">รับจริง (ชิ้น)</th>
                     <th className="pb-4 text-center">เลขที่บิล</th>
                     <th className="pb-4 text-right pr-6">สถานะการตรวจสอบ</th>
                   </tr>
@@ -1716,14 +1609,14 @@ const handleConfirmImport = async () => {
                       <tr key={idx} className="text-sm font-bold text-slate-700 bg-white group hover:bg-slate-50 transition-all shadow-sm">
                         <td className="py-4 pl-6 rounded-l-3xl border-y-2 border-l-2 border-slate-50">
                           <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-400 font-black"># {row['ID อ้างอิง']}</span>
+                            <span className="text-[11px] text-slate-400 font-semibold"># {row['ID อ้างอิง']}</span>
                             <span className="max-w-70 truncate text-slate-900">{row['รายการสินค้า']}</span>
                           </div>
                         </td>
                         
                         {/* คู่ที่ 1: ยอดสั่ง (กล่อง) */}
                         <td className="py-4 text-center border-y-2 border-slate-50 text-slate-950 text-lg">
-                          {orderBox} <span className="text-[10px] text-slate-400 font-normal">{row['หน่วยหลัก']}</span>
+                          {orderBox} <span className="text-[11px] text-slate-400 font-normal">{row['หน่วยหลัก']}</span>
                         </td>
 
                         {/* คู่ที่ 2: บรรจุ/กล่อง */}
@@ -1732,30 +1625,30 @@ const handleConfirmImport = async () => {
                         </td>
 
                         {/* ผลรับจริง (กล่อง) - เทียบกับยอดสั่ง */}
-                        <td className={`py-4 text-center border-y-2 border-slate-50 border-x font-black text-xl ${!isBoxMatch ? 'text-red-600 bg-red-50' : 'text-blue-700 bg-blue-50/30'}`}>
+                        <td className={`py-4 text-center border-y-2 border-slate-50 border-x font-semibold text-xl ${!isBoxMatch ? 'text-red-600 bg-red-50' : 'text-blue-700 bg-blue-50/30'}`}>
                           {recvBox}
                         </td>
                         
                         {/* ผลรับจริง (ชิ้น) - เทียบกับบรรจุ/กล่อง */}
-                        <td className={`py-4 text-center border-y-2 border-slate-50 border-r font-black text-xl ${!isPieceMatch ? 'text-orange-600 bg-orange-50' : 'text-blue-700 bg-blue-50/30'}`}>
+                        <td className={`py-4 text-center border-y-2 border-slate-50 border-r font-semibold text-xl ${!isPieceMatch ? 'text-orange-600 bg-orange-50' : 'text-blue-700 bg-blue-50/30'}`}>
                           {recvPiece}
                         </td>
 
                         <td className="py-4 text-center border-y-2 border-slate-50">
-                          <span className="bg-slate-100 px-3 py-1 rounded-lg text-xs font-black">{row['เลขที่บิล'] || '-'}</span>
+                          <span className="bg-slate-100 px-3 py-1 rounded-lg text-xs font-semibold">{row['เลขที่บิล'] || '-'}</span>
                         </td>
 
                         {/* ตรวจสอบสถานะ */}
                       <td className="py-4 pr-6 text-right rounded-r-3xl border-y-2 border-r-2 border-slate-50">
                         {isComplete ? (
-                          <span className="text-emerald-600 bg-emerald-50 px-4 py-1.5 rounded-full text-[10px] border border-emerald-100 font-black uppercase">
+                          <span className="text-emerald-600 bg-emerald-50 px-4 py-1.5 rounded-full text-[11px] border border-emerald-100 font-semibold ">
                             ✓ OK ครบ
                           </span>
                         ) : (
                           <div className="flex flex-col items-end gap-1">
                             {/* 1. เช็คส่วนต่างกล่อง: รับจริง - ยอดสั่ง */}
                             {recvBox !== orderBox && (
-                              <span className={`text-[9px] px-2 py-0.5 rounded border font-black ${recvBox > orderBox ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                              <span className={`text-[11px] px-2 py-0.5 rounded border font-semibold ${recvBox > orderBox ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
                                 กล่อง {recvBox > orderBox ? 'เกิน' : 'ขาด'} ({recvBox - orderBox})
                               </span>
                             )}
@@ -1763,7 +1656,7 @@ const handleConfirmImport = async () => {
                             {/* 2. เช็คส่วนต่างเศษชิ้น: รับจริง(ชิ้น) - บรรจุ/กล่อง */}
                             {/* ตรงนี้แหละครับที่จะทำให้รายการ Test โชว์ส่วนต่างออกมา */}
                             {recvPiece !== packSize && (
-                              <span className={`text-[9px] px-2 py-0.5 rounded border font-black ${recvPiece > packSize ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                              <span className={`text-[11px] px-2 py-0.5 rounded border font-semibold ${recvPiece > packSize ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
                                 เศษ {recvPiece > packSize ? 'เกิน' : 'ขาด'} ({recvPiece - packSize})
                               </span>
                             )}
@@ -1780,21 +1673,21 @@ const handleConfirmImport = async () => {
             {/* Footer */}
             <div className="p-8 bg-slate-950 flex flex-col md:flex-row gap-6 items-center">
               <div className="flex-1 text-white">
-                <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">Confirmation Required</p>
+                <p className="text-[11px] font-semibold text-amber-400">Confirmation Required</p>
                 <p className="text-sm font-bold">ตรวจสอบยอดรับจริง (กล่อง/ชิ้น) ให้ตรงกับหน้างานสำเพ็งบุรีรัมย์</p>
               </div>
               <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                 <input 
                   type="text" 
                   placeholder="พิมพ์ชื่อพี่ชาย หรือผู้ตรวจรับ..."
-                  className="bg-slate-900 border-2 border-slate-800 p-4 rounded-2xl font-black text-white outline-none focus:border-yellow-400 transition-all text-sm w-full md:w-64"
+                  className="bg-slate-900 border-2 border-slate-800 p-4 rounded-2xl font-semibold text-white outline-none focus:border-amber-400 transition-all text-sm w-full md:w-64"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
                 />
                 <button 
                   onClick={handleConfirmImport}
                   disabled={isSubmitting}
-                  className={`px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-yellow-400/5 ${isSubmitting ? 'bg-slate-800 text-slate-500' : 'bg-yellow-400 text-slate-950 hover:bg-yellow-300'}`}
+                  className={`px-10 py-4 rounded-2xl font-semibold text-xs   transition-all shadow-sm ${isSubmitting ? 'bg-slate-800 text-slate-500' : 'bg-amber-400 text-slate-950 hover:bg-amber-300'}`}
                 >
                   {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกเข้าสต็อกจริง'}
                 </button>
@@ -1807,24 +1700,24 @@ const handleConfirmImport = async () => {
       {updatingItem && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setUpdatingItem(null)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
-            <h3 className="text-2xl font-black uppercase italic text-slate-900 mb-2">แก้ไข / ปรับยอดรับ</h3>
-            <p className="text-xs font-bold text-slate-400 mb-6 uppercase">{updatingItem.productName}</p>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
+            <h3 className="text-2xl font-semibold text-slate-900 mb-2">แก้ไข / ปรับยอดรับ</h3>
+            <p className="text-xs font-bold text-slate-400 mb-6 ">{updatingItem.productName}</p>
             
             <div className="space-y-4 mb-8 text-left">
               <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100 mb-4">
-                <p className="text-[10px] font-black text-yellow-700 uppercase mb-1">คำแนะนำสำหรับ:</p>
-                <p className="text-[11px] font-bold text-yellow-600 leading-tight">
+                <p className="text-[11px] font-semibold text-amber-700 mb-1">คำแนะนำสำหรับ:</p>
+                <p className="text-[11px] font-bold text-amber-600 leading-tight">
                   กรอกเลขบวก (เช่น 1) เพื่อ <span className="underline">รับเพิ่ม</span><br/>
                   กรอกเลขติดลบ (เช่น -1) เพื่อ <span className="underline">ลดจำนวน</span>
                 </p>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">ปรับยอดลัง ({updatingItem.cartonUnit})</label>
+                <label className="text-[11px] font-semibold text-slate-400 mb-1 block">ปรับยอดลัง ({updatingItem.cartonUnit})</label>
                 <input 
                   type="number"
-                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black outline-none focus:border-yellow-400 transition-all"
+                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-semibold outline-none focus:border-amber-400 transition-all"
                   placeholder="เช่น 1 หรือ -1"
                   value={additionalQty || ''}
                   onChange={(e) => setAdditionalQty(e.target.value)}
@@ -1832,10 +1725,10 @@ const handleConfirmImport = async () => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">ปรับยอดเศษ ({updatingItem.innerUnit})</label>
+                <label className="text-[11px] font-semibold text-slate-400 mb-1 block">ปรับยอดเศษ ({updatingItem.innerUnit})</label>
                 <input 
                   type="number"
-                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black outline-none focus:border-yellow-400 transition-all"
+                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-semibold outline-none focus:border-amber-400 transition-all"
                   placeholder="เช่น 5 หรือ -5"
                   value={additionalRecvQty || ''}
                   onChange={(e) => setAdditionalRecvQty(e.target.value)}
@@ -1843,10 +1736,10 @@ const handleConfirmImport = async () => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">หมายเหตุการแก้ไข</label>
+                <label className="text-[11px] font-semibold text-slate-400 mb-1 block">หมายเหตุการแก้ไข</label>
                 <input 
                   type="text"
-                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black outline-none focus:border-yellow-400 transition-all text-sm"
+                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-semibold outline-none focus:border-amber-400 transition-all text-sm"
                   placeholder="ระบุสาเหตุ (เช่น ของขาดส่งมาเพิ่ม)..."
                   value={additionalNote || ''}
                   onChange={(e) => setAdditionalNote(e.target.value)}
@@ -1855,11 +1748,11 @@ const handleConfirmImport = async () => {
             </div>
 
             <div className="flex gap-4">
-              <button onClick={() => setUpdatingItem(null)} className="flex-1 py-4 font-black text-[10px] uppercase text-slate-400">ยกเลิก</button>
+              <button onClick={() => setUpdatingItem(null)} className="flex-1 py-4 font-semibold text-[11px] text-slate-400">ยกเลิก</button>
               <button 
                 onClick={handleUpdateAdditional} 
                 disabled={isSubmitting}
-                className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950'}`}
+                className={`flex-1 py-4 rounded-2xl font-semibold text-[11px]   transition-all ${isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-amber-400 hover:bg-amber-400 hover:text-slate-950'}`}
               >
                 {isSubmitting ? 'Updating...' : 'บันทึกการแก้ไข'}
               </button>
@@ -1873,6 +1766,7 @@ const handleConfirmImport = async () => {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
       `}} />
+    </div>
     </div>
   );
 }

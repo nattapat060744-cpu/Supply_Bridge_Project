@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Prompt, IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Navbar from '@/components/Navbar';
@@ -22,6 +22,12 @@ export const metadata: Metadata = {
   description: "ระบบจัดซื้อและตรวจรับสินค้าสำเพ็ง",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#f1f4f8",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,8 +36,9 @@ export default function RootLayout({
   return (
     <html lang="th">
       <body className={`${prompt.variable} ${plexThai.variable} antialiased`}>
-        <Navbar /> 
-        <main className="min-h-screen">{children}</main>
+        <Navbar />
+        {/* เว้นที่ด้านล่างให้แถบเมนูมือถือ ไม่ให้บังเนื้อหา */}
+        <main className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">{children}</main>
       </body>
     </html>
   );

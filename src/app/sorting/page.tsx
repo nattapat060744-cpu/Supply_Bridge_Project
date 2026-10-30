@@ -612,10 +612,10 @@ const fetchStatus = async () => {
     };
 
   return (
-    <div className="app-shell font-sans pb-20">
+    <div className="app-shell pb-20">
       {paging && <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[2px] cursor-wait" aria-busy="true">
         <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-800 shadow-xl">
-          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-[var(--tone)]" />
           กำลังโหลดหน้าที่ {currentPage}…
         </div>
       </div>}
@@ -624,68 +624,62 @@ const fetchStatus = async () => {
         {exportError && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{exportError}</p>}
         
         {/* Header Section */}
-          <div className="app-hero mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 p-6 md:p-8 text-slate-900 border-b-4 border-blue-600">
-            <div className="relative z-10">
-              <span className="page-kicker text-blue-600 mb-3 block">
-                Sorting & Distribution Control
-              </span>
-              <h1 className="page-title font-display">
-                จัดการ <span className="text-blue-600 not-italic">ฝ่ายธุรการคลัง</span>
-              </h1>
-              <p className="page-subtitle mt-4 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                ระบบติดตามสถานะสินค้า - สำเพ็ง บุรีรัมย์
-              </p>
+          <section className="app-hero mb-6 flex flex-col gap-5 p-6 pl-8 md:flex-row md:items-end md:justify-between md:p-8 md:pl-10">
+            <div>
+              <p className="page-kicker mb-3">Sorting & Distribution</p>
+              <h1 className="page-title font-display">ฝ่ายธุรการคลัง</h1>
+              <p className="page-subtitle mt-2">ติดตามสถานะสินค้าที่ขาด ตั้งแต่แจ้งคำขอจนของเข้าคลัง - สำเพ็ง บุรีรัมย์</p>
             </div>
-          {canManageSorting && (
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="primary-action bg-blue-600 text-white shadow-lg shadow-blue-600/15 hover:bg-slate-900 md:self-end"
-          >
-            <span className="text-xl">+</span> สร้างคำขอใหม่
-          </button>
-          )}
-        </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="metric-tile px-5 py-3 text-center">
+                <p className="text-2xl font-bold leading-none">{stats.total}</p>
+                <p className="mt-1 text-xs font-medium">บิลทั้งหมด</p>
+              </div>
+              {canManageSorting && (
+                <button onClick={() => setIsModalOpen(true)} className="primary-action">
+                  <span className="text-lg leading-none">+</span> สร้างคำขอใหม่
+                </button>
+              )}
+            </div>
+          </section>
         <IssueTracking items={Object.values(activeBatches).flat()} />
 
         
 
 
         {/* Stats & Search */}
-        <div className="mb-8 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl opacity-30">🔍</span>
-            <input 
-              type="text" 
-              placeholder="ค้นหาบิล หรือชื่อสินค้า..." 
-              className="control-field w-full p-4 pl-14 rounded-xl font-bold text-base placeholder:text-slate-300"
-              value={searchTerm || ''}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            />
-          </div>
-          <div className="metric-tile p-4 flex items-center justify-center gap-4 min-w-55">
-            <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center text-xs font-black text-blue-600">บิล</div>
-            <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">บิลทั้งหมด</p>
-              <p className="text-2xl font-black text-blue-600 leading-none">{stats.total}</p>
-            </div>
-          </div>
+        <div className="relative mb-6">
+          <svg className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input
+            type="search"
+            aria-label="ค้นหาบิลหรือสินค้า"
+            placeholder="ค้นหาบิล หรือชื่อสินค้า"
+            className="control-field w-full py-3.5 pl-12 pr-4 text-base"
+            value={searchTerm || ''}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          />
         </div>
         
 
         {/* Batch Monitoring Section */}
         <section className="space-y-6">
-          <div className="flex items-center gap-4 mb-6 px-2">
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter italic">รายการบิลที่กำลังดำเนินการ</h2>
-            <div className="h-px flex-1 bg-slate-100"></div>
-          </div>
+
           
           {loadError && <p role="alert" className="p-4 text-red-700">{loadError}</p>}
           {loading && Object.keys(activeBatches).length === 0 ? (
-            <div className="text-center py-20 font-black text-slate-300 uppercase tracking-widest text-xs">กำลังโหลดข้อมูลสถานะสด...</div>
+            <div className="space-y-4" aria-busy="true">
+              {[0, 1, 2].map((n) => (
+                <div key={n} className="app-card flex items-center gap-4 p-6">
+                  <div className="skeleton h-12 w-12 !rounded-2xl" />
+                  <div className="flex-1 space-y-2"><div className="skeleton h-5 w-56" /><div className="skeleton h-3 w-32" /></div>
+                </div>
+              ))}
+            </div>
           ) : currentBatchIds.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-[40px] border-2 border-dashed border-slate-200 text-slate-400 font-bold uppercase text-xs">
-              ไม่พบข้อมูลที่ตรงกับการค้นหาครับ
+            <div className="app-card px-6 py-16 text-center">
+              <p className="font-semibold text-[var(--ink)]">ไม่พบบิลที่ตรงกับคำค้นหา</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">ลองเปลี่ยนคำค้น หรือสร้างคำขอใหม่</p>
+              {searchTerm && <button onClick={() => { setSearchTerm(''); setCurrentPage(1); }} className="secondary-action mt-4">ล้างคำค้นหา</button>}
             </div>
           ) : (
             <div className="space-y-10">
@@ -693,15 +687,11 @@ const fetchStatus = async () => {
                 <div key={dateLabel} className="space-y-6">
                   
                   {/* --- ส่วนหัวของวันที่ (Date Header) --- */}
-                  <div className="flex items-center gap-4 py-4">
-                    <div className="h-px flex-1 bg-slate-200"></div>
-                    <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-100 shadow-sm">
-                      <span className="text-xs font-black text-slate-400">รายการของวันที่:</span>
-                      <span className="text-sm font-black text-slate-600 uppercase tracking-tight">
-                         {dateLabel}
-                      </span>
-                    </div>
-                    <div className="h-px flex-1 bg-slate-200"></div>
+                  <div className="sticky top-[67px] z-10 flex items-center gap-3 bg-[var(--bg)]/90 py-2 backdrop-blur">
+                    <span className="h-2 w-2 rounded-full bg-[var(--tone)]" />
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">{dateLabel}</h3>
+                    <span className="text-xs text-[var(--muted)]">{batchesInDate.length} บิล</span>
+                    <span className="h-px flex-1 bg-[var(--line)]" />
                   </div>
 
                   {/* รายการบิลของวันนั้นๆ */}
@@ -724,122 +714,95 @@ const fetchStatus = async () => {
                     );
                     const isStep4Active = batchItems.length > 0 && batchItems.every((i: OrderItem) => i.status === 'COMPLETED');
 
-                    let currentIcon = '🛒';
-                    const statusBgColor = 'bg-blue-500';
-
-                    if (isStep4Active) {
-                      currentIcon = '🏁';
-                    } else if (isStep3Active) {
-                      currentIcon = '🚚';
-                    } else if (isStep2Active) {
-                      currentIcon = '🛒';
-                    }
+                    const stageLabel = isStep4Active ? 'เรียบร้อย' : isStep3Active ? 'กำลังส่ง' : isStep2Active ? 'สั่งซื้อแล้ว' : 'รอจัดซื้อ';
+                    const stageStyle = isStep4Active ? 'bg-slate-900 text-white' : isStep3Active ? 'bg-amber-100 text-amber-800' : isStep2Active ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800';
 
                     const hasUpdateInBatch = batchItems.some((item: OrderItem) => updatedItems.has(notificationRowKey(item)));
                     return (
                       <div key={batchId} id={`batch-${batchId}`} className={`app-card overflow-hidden transition-all ${isExpanded ? 'bg-white' : 'bg-white/80 hover:bg-white'}`}>
-                        <div 
+                        <div
+                          role="button" tabIndex={0} aria-expanded={Boolean(isExpanded)}
+                          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.currentTarget.click(); } }}
                           onClick={() => {
                             const nextExpanded = !isExpanded;
                             setExpandedBatches((prev: Record<string, boolean>) => ({ ...prev, [batchId]: nextExpanded }));
                             if (nextExpanded) clearBatchNotifications(batchId);
                           }}
-                          className={`w-full p-6 md:p-10 flex justify-between items-center transition-colors cursor-pointer ${isExpanded ? 'bg-slate-900 text-white' : 'text-slate-900'}`}
+                          className={`flex cursor-pointer items-center justify-between gap-4 p-5 transition-colors md:p-6 ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
                         >
-                          {/* ฝั่งซ้าย: ไอคอนและชื่อบิล */}
-                          <div className="flex items-center gap-6">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm relative transition-all duration-300 ${
-                              isExpanded ? 'bg-blue-600' : statusBgColor
-                            }`}>
-                              <span className={`leading-none ${currentIcon === '🚚' ? 'animate-pulse' : ''}`}>
-                                {currentIcon}
-                              </span>
+                          <div className="flex min-w-0 items-center gap-4">
+                            <div className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--tone-soft)] text-[var(--tone-ink)]">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1M8.5 11h7M8.5 14.5h7M8.5 18h4" /></svg>
                               {hasUpdateInBatch && !isExpanded && (
-                                <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-4 border-white rounded-full animate-ping"></span>
+                                <span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-600">
+                                  <span className="absolute inset-0 animate-ping rounded-full bg-blue-400" />
+                                </span>
                               )}
                             </div>
-
-                            <div className="text-left">
-                              <span className={`text-[10px] font-black uppercase block tracking-[0.2em] mb-1 ${isExpanded ? 'opacity-40' : 'text-slate-400'}`}>
-                                ชื่อรอบการสั่งซื้อ
-                              </span>
-                              <h2 className="text-xl font-black uppercase italic leading-none tracking-tight">
-                                {batchItems[0]?.batchName || batchId}
-                              </h2>
+                            <div className="min-w-0 text-left">
+                              <h2 className="truncate text-lg font-semibold text-[var(--ink)]">{batchItems[0]?.batchName || batchId}</h2>
+                              <p className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
+                                <span className={`rounded-full px-2.5 py-0.5 font-semibold ${stageStyle}`}>{stageLabel}</span>
+                                {batchItems.length} รายการ
+                              </p>
                             </div>
                           </div>
 
-                          {/* ฝั่งขวา: ปุ่ม Export และลูกศร (รวมกลุ่มกัน) */}
-                          <div className="flex items-center gap-4">
+                          <div className="flex shrink-0 items-center gap-3">
                             {canExportSorting && (
-                            <button 
+                              <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleExport(batchId);
                               }}
-                              type="button"
-                              disabled={exportingBatch !== null}
-                              aria-label={exportingBatch === batchId ? "กำลังส่งออก Excel" : "ส่งออก Excel"}
-                              className="disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-900/20 whitespace-nowrap"
-                            >
-                              <span>📊</span><span className="hidden md:inline">{exportingBatch === batchId ? "กำลังส่งออก…" : "EXPORT EXCEL"}</span>
-                            </button>
+                                type="button"
+                                disabled={exportingBatch !== null}
+                                aria-label={exportingBatch === batchId ? "กำลังส่งออก Excel" : "ส่งออก Excel"}
+                                className="secondary-action !px-3 !py-2 text-xs"
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14" /></svg>
+                                <span className="hidden md:inline">{exportingBatch === batchId ? "กำลังส่งออก…" : "ส่งออก Excel"}</span>
+                              </button>
                             )}
-
-                            <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 border-white/20 text-white' : 'border-slate-200 text-slate-400'}`}>
-                              ↑
-                            </div>
+                            <svg aria-hidden="true" className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[var(--tone-ink)]' : 'text-slate-300'}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
                           </div>
                         </div>
 
                         {isExpanded && (
                           <div className="p-6 md:p-10 space-y-10 bg-slate-50/30">
-                            <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                              <div className="relative flex justify-between items-center px-6">
-                                <div className="absolute top-5 left-16 right-16 h-0.5 bg-slate-100 z-0"></div>
-                                
-                                {/* จุดที่ 1: สร้างคำขอ */}
-                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                  <div className="w-11 h-11 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg text-sm">✓</div>
-                                  <span className="text-[9px] font-black uppercase text-blue-600 tracking-tighter">สร้างคำขอ</span>
-                                </div>
-
-                                {/* จุดที่ 2: สั่งซื้อแล้ว */}
-                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    isStep2Active ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
-                                  }`}>🛒</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep2Active ? 'text-emerald-600' : 'text-slate-300'}`}>สั่งซื้อแล้ว</span>
-                                </div>
-
-                                {/* จุดที่ 3: กำลังส่ง */}
-                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    isStep3Active ? 'bg-amber-500 text-white animate-pulse shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
-                                  }`}>🚚</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep3Active ? 'text-amber-600' : 'text-slate-300'}`}>กำลังส่ง</span>
-                                </div>
-
-                                {/* จุดที่ 4: เรียบร้อย */}
-                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                                    isStep4Active ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-2 border-slate-100 text-slate-200'
-                                  }`}>🏁</div>
-                                  <span className={`text-[9px] font-black uppercase tracking-tighter ${isStep4Active ? 'text-slate-900' : 'text-slate-300'}`}>เรียบร้อย</span>
-                                </div>
-                              </div>
-                            </div>
+                            {(() => {
+                              const steps = [
+                                { label: 'สร้างคำขอ', done: true },
+                                { label: 'สั่งซื้อแล้ว', done: isStep2Active },
+                                { label: 'กำลังส่ง', done: isStep3Active },
+                                { label: 'เรียบร้อย', done: isStep4Active },
+                              ];
+                              const reached = steps.filter((s) => s.done).length;
+                              return (
+                                <ol aria-label="สถานะบิล" className="mx-auto flex max-w-3xl items-start rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
+                                  {steps.map((st, i) => (
+                                    <li key={st.label} className="relative flex-1 text-center">
+                                      {i > 0 && <span aria-hidden="true" className={`absolute right-1/2 top-[18px] h-0.5 w-full transition-colors duration-500 ${st.done ? 'bg-[var(--tone)]' : 'bg-slate-200'}`} />}
+                                      <span className={`relative z-10 mx-auto grid h-9 w-9 place-items-center rounded-full text-sm font-bold transition-all duration-500 ${st.done ? 'bg-[var(--tone-ink)] text-white' : 'bg-white text-slate-300 ring-2 ring-slate-200'} ${i === reached - 1 && reached < 4 ? 'ring-4 ring-[var(--tone-soft)]' : ''}`}>
+                                        {st.done ? '✓' : i + 1}
+                                      </span>
+                                      <span className={`mt-2 block text-xs font-semibold ${st.done ? 'text-[var(--ink)]' : 'text-slate-400'}`}>{st.label}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              );
+                            })()}
 
                             {/* Items Table */}
                             <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
                               <div className="hidden md:block px-10 py-5 bg-slate-900">
                                 <div className="flex items-center gap-6">
-                                  <div className="flex-1 text-white text-[10px] font-black uppercase tracking-[0.2em] italic">ชื่อสินค้า / รายละเอียด</div>
+                                  <div className="flex-1 text-white text-[11px] font-semibold tracking-wide ">ชื่อสินค้า / รายละเอียด</div>
                                   <div className="flex items-center gap-4 min-w-137.5">
-                                    <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลจัดซื้อ</div>
-                                    <div className="w-27.5 text-white text-[10px] font-black uppercase tracking-widest text-center">ข้อมูลรับของ</div>
-                                    <div className="flex-1 text-white text-[10px] font-black uppercase tracking-widest pl-4">หมายเหตุ</div>
-                                    <div className="w-32 text-white text-[10px] font-black uppercase tracking-widest text-center">สถานะ</div>
+                                    <div className="w-27.5 text-white text-[11px] font-semibold text-center">ข้อมูลจัดซื้อ</div>
+                                    <div className="w-27.5 text-white text-[11px] font-semibold text-center">ข้อมูลรับของ</div>
+                                    <div className="flex-1 text-white text-[11px] font-semibold pl-4">หมายเหตุ</div>
+                                    <div className="w-32 text-white text-[11px] font-semibold text-center">สถานะ</div>
                                   </div>
                                 </div>
                               </div>
@@ -853,7 +816,7 @@ const fetchStatus = async () => {
                                     <div key={idx} className={`p-6 md:px-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-700 ${isItemUpdated ? 'bg-blue-50 border-l-8 border-blue-500' : 'hover:bg-slate-50/50 border-l-8 border-transparent'}`}>
                                       <div className="flex-1 w-full md:w-auto">
                                         <div className="flex items-center gap-2 mb-1">
-                                          <span className="text-[12px] bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500 uppercase tracking-tighter">ID: {order.id}</span>
+                                          <span className="text-xs bg-slate-100 px-3 py-1 rounded-full font-semibold text-slate-500 ">ID: {order.id}</span>
                                           {isItemUpdated && (
                                             <span className="flex h-2 w-2 relative">
                                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -861,48 +824,48 @@ const fetchStatus = async () => {
                                             </span>
                                           )}
                                         </div>
-                                        <h4 className="font-black text-slate-900 uppercase italic tracking-tight text-lg leading-tight">{order.name}</h4>
-                                        {order.note && <p className="text-[10px] text-blue-600 font-black mt-2 italic flex items-center gap-1"><span>📝</span> {order.note}</p>}
+                                        <h4 className="font-semibold text-slate-900 tracking-tight text-lg leading-tight">{order.name}</h4>
+                                        {order.note && <p className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1"><span>📝</span> {order.note}</p>}
                                       </div>
 
-                                      <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto bg-slate-50 md:bg-transparent p-5 md:p-0 rounded-3xl min-w-137.5">
+                                      <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto bg-slate-50 md:bg-transparent p-5 md:p-0 rounded-2xl min-w-137.5">
                                         <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
-                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลจัดซื้อ</span>
+                                          <span className="block text-[11px] font-semibold text-slate-300 mb-2 md:hidden">ข้อมูลจัดซื้อ</span>
                                           {order.orderCarton || order.qtyPerCarton ? (
                                             <div className="flex flex-col items-center">
-                                              <div className="text-base font-black text-emerald-700 leading-none">{order.orderCarton || '0'} <span className="text-[9px] text-emerald-400 uppercase">{order.cartonUnit || 'ลัง'}</span></div>
-                                              <div className="mt-1.5 pt-1.5 border-t border-emerald-100 w-full text-[11px] font-black text-slate-500 leading-none">
-                                                {order.qtyPerCarton || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.innerUnit || 'ชิ้น'}</span>
+                                              <div className="text-base font-semibold text-emerald-700 leading-none">{order.orderCarton || '0'} <span className="text-[11px] text-emerald-400 ">{order.cartonUnit || 'ลัง'}</span></div>
+                                              <div className="mt-1.5 pt-1.5 border-t border-emerald-100 w-full text-[11px] font-semibold text-slate-500 leading-none">
+                                                {order.qtyPerCarton || '0'} <span className="text-[11px] text-slate-400 ">{order.innerUnit || 'ชิ้น'}</span>
                                               </div>
                                             </div>
-                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอเข้าคลัง</span>}
+                                          ) : <span className="text-[11px] font-semibold text-slate-300 ">รอเข้าคลัง</span>}
                                         </div>
 
                                         <div className="text-center md:border-r md:border-slate-100 md:pr-4 min-w-27.5">
-                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">ข้อมูลรับของ</span>
+                                          <span className="block text-[11px] font-semibold text-slate-300 mb-2 md:hidden">ข้อมูลรับของ</span>
                                           {(order.Recv_Carton !== undefined && order.Recv_Carton !== null && order.Recv_Carton !== '') ? (
                                             <div className="flex flex-col items-center">
-                                              <div className="text-base font-black text-yellow-600 leading-none">{order.Recv_Carton} <span className="text-[9px] text-yellow-400 uppercase">{order.Recv_Unit || 'ลัง'}</span></div>
-                                              <div className="mt-1.5 pt-1.5 border-t border-yellow-100 w-full text-[11px] font-black text-slate-500 leading-none">
-                                                {order.Recv_Qty || '0'} <span className="text-[9px] text-slate-400 uppercase">{order.Recv_Qty_Unit || 'ชิ้น'}</span>
+                                              <div className="text-base font-semibold text-yellow-600 leading-none">{order.Recv_Carton} <span className="text-[11px] text-yellow-400 ">{order.Recv_Unit || 'ลัง'}</span></div>
+                                              <div className="mt-1.5 pt-1.5 border-t border-yellow-100 w-full text-[11px] font-semibold text-slate-500 leading-none">
+                                                {order.Recv_Qty || '0'} <span className="text-[11px] text-slate-400 ">{order.Recv_Qty_Unit || 'ชิ้น'}</span>
                                               </div>
                                             </div>
-                                          ) : <span className="text-[10px] font-black text-slate-300 italic uppercase">รอเข้าคลัง</span>}
+                                          ) : <span className="text-[11px] font-semibold text-slate-300 ">รอเข้าคลัง</span>}
                                         </div>
 
                                         <div className="flex-1 w-full md:w-auto text-center md:text-left px-2">
-                                          <span className="block text-[9px] font-black text-slate-300 uppercase mb-2 md:hidden">หมายเหตุ</span>
-                                          <div className="text-[10px] font-bold italic leading-tight space-y-1.5">
+                                          <span className="block text-[11px] font-semibold text-slate-300 mb-2 md:hidden">หมายเหตุ</span>
+                                          <div className="text-[11px] font-bold leading-tight space-y-1.5">
                                             {order.Note_Stock && (
                                               <div onClick={() => toggleNote(`${batchId}-${order.id}-stock`)} className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all">
-                                                <p className={`text-yellow-600 font-black ${expandedNotes[`${batchId}-${order.id}-stock`] ? 'whitespace-normal' : 'truncate'}`}>
+                                                <p className={`text-yellow-600 font-semibold ${expandedNotes[`${batchId}-${order.id}-stock`] ? 'whitespace-normal' : 'truncate'}`}>
                                                   🏁 {order.Note_Stock}
                                                 </p>
                                               </div>
                                             )}
                                             {order.Note_Purchase && (
                                               <div onClick={() => toggleNote(`${batchId}-${order.id}-pur`)} className="cursor-pointer hover:bg-slate-50 p-1 rounded transition-all">
-                                                <p className={`text-emerald-600 font-black ${expandedNotes[`${batchId}-${order.id}-pur`] ? 'whitespace-normal' : 'truncate'}`}>
+                                                <p className={`text-emerald-600 font-semibold ${expandedNotes[`${batchId}-${order.id}-pur`] ? 'whitespace-normal' : 'truncate'}`}>
                                                   💬 {order.Note_Purchase}
                                                 </p>
                                               </div>
@@ -913,7 +876,7 @@ const fetchStatus = async () => {
 
                                         {/* แก้ไขส่วน Status และเพิ่มปุ่มจัดการ */}
                                         <div className="flex flex-col gap-2 w-full md:w-32">
-                                          <div className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tight border text-center transition-all shadow-sm ${
+                                          <div className={`px-4 py-3 rounded-2xl text-[11px] font-semibold  tracking-tight border text-center transition-all shadow-sm ${
                                               order.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
                                               order.status === 'COMPLETED' ? 'bg-slate-900 text-white border-slate-900' : 
                                               (order.status === 'ORDERED' || order.status === 'RECEIVED') ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' : 
@@ -930,13 +893,13 @@ const fetchStatus = async () => {
                                             <div className="flex gap-1">
                                               <button 
                                                 onClick={() => { setEditingItem(order); setOriginalId(order.id); setIsEditModalOpen(true); }}
-                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl text-[9px] font-black transition-all bg-white"
+                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl text-[11px] font-semibold transition-all bg-white"
                                               >
                                                 แก้ไข
                                               </button>
                                               <button 
                                                 onClick={() => handleDeleteItem(order)}
-                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 rounded-xl text-[9px] font-black transition-all bg-white"
+                                                className="flex-1 py-1.5 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 rounded-xl text-[11px] font-semibold transition-all bg-white"
                                               >
                                                 ลบ
                                               </button>
@@ -962,9 +925,9 @@ const fetchStatus = async () => {
 
  {canManageSorting && isEditModalOpen && editingItem && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-110 p-4">
-            <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border-t-8 border-blue-600">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-t-8 border-blue-600">
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase italic">แก้ไขข้อมูลสินค้า</h2>
+                <h2 className="text-xl font-semibold ">แก้ไขข้อมูลสินค้า</h2>
                 <button onClick={() => setIsEditModalOpen(false)} className="text-xl hover:rotate-90 transition-transform">x</button>
               </div>
 
@@ -972,7 +935,7 @@ const fetchStatus = async () => {
                 <div className="grid grid-cols-3 gap-4">
                   {/* เพิ่มช่องแก้ไขรหัสสินค้า */}
                   <div className="col-span-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">รหัสสินค้า (ID)</label>
+                    <label className="text-[11px] font-semibold text-slate-400 ml-1">รหัสสินค้า (ID)</label>
                     <input 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.id} 
@@ -981,9 +944,9 @@ const fetchStatus = async () => {
                   </div>
                   {/* เพิ่มช่องแก้ไขบริษัทซัพพลายเออร์ */}
                   <div className="col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ซัพพลายเออร์ (Supplier)</label>
+                    <label className="text-[11px] font-semibold text-slate-400 ml-1">ซัพพลายเออร์ (Supplier)</label>
                     <input 
-                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none uppercase" 
+                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none " 
                       value={editingItem.supplier || ''} 
                       onChange={(e) => setEditingItem({...editingItem, supplier: e.target.value})} 
                     />
@@ -991,7 +954,7 @@ const fetchStatus = async () => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">ชื่อสินค้า</label>
+                  <label className="text-[11px] font-semibold text-slate-400 ml-1">ชื่อสินค้า</label>
                   <input 
                     className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                     value={editingItem.name} 
@@ -1001,7 +964,7 @@ const fetchStatus = async () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หน้าร้าน</label>
+                    <label className="text-[11px] font-semibold text-slate-400 ml-1">หน้าร้าน</label>
                     <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.storeQty} 
@@ -1009,7 +972,7 @@ const fetchStatus = async () => {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">คลังสินค้า</label>
+                    <label className="text-[11px] font-semibold text-slate-400 ml-1">คลังสินค้า</label>
                     <input type="number" 
                       className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editingItem.warehouseQty} 
@@ -1019,7 +982,7 @@ const fetchStatus = async () => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หมายเหตุ</label>
+                  <label className="text-[11px] font-semibold text-slate-400 ml-1">หมายเหตุ</label>
                   <textarea 
                     className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                     rows={2} 
@@ -1028,7 +991,7 @@ const fetchStatus = async () => {
                   />
                 </div>
 
-                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl uppercase text-[11px] tracking-widest hover:bg-slate-900 shadow-lg transition-all active:scale-[0.98]">บันทึกการแก้ไขข้อมูล</button>
+                <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-5 rounded-2xl text-[11px] hover:bg-slate-900 shadow-lg transition-all active:scale-[0.98]">บันทึกการแก้ไขข้อมูล</button>
               </form>
             </div>
           </div>
@@ -1040,7 +1003,7 @@ const fetchStatus = async () => {
             <button 
               onClick={() => {setPaging(true);setCurrentPage(prev => Math.max(prev - 1, 1));}}
               disabled={paging || loading || currentPage === 1}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl font-semibold text-[11px]  transition-all ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >← ก่อนหน้า</button>
             <div className="flex gap-1 items-center">
               {(() => {
@@ -1053,7 +1016,7 @@ const fetchStatus = async () => {
                         key={i}
                         disabled={paging || loading || currentPage===i}
                         onClick={() => {setPaging(true);setCurrentPage(i);}}
-                        className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
+                        className={`w-10 h-10 rounded-xl font-semibold text-xs transition-all ${currentPage === i ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-400 hover:bg-slate-100 border border-slate-100'}`}
                       >
                         {i}
                       </button>
@@ -1068,7 +1031,7 @@ const fetchStatus = async () => {
             <button 
               onClick={() => {setPaging(true);setCurrentPage(prev => Math.min(prev + 1, totalPages));}}
               disabled={paging || loading || currentPage === totalPages}
-              className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl font-semibold text-[11px]  transition-all ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'bg-white text-slate-900 shadow-sm hover:bg-emerald-600 hover:text-white'}`}
             >ถัดไป →</button>
           </div>
         )}
@@ -1077,13 +1040,13 @@ const fetchStatus = async () => {
         {canManageSorting && isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-100 p-4">
             {/* ล็อกความสูงสูงสุดที่ 90% ของหน้าจอ */}
-            <div className="bg-white rounded-[45px] shadow-2xl w-full max-w-5xl overflow-hidden max-h-[90vh] flex flex-col border-t-8 border-blue-600 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden max-h-[90vh] flex flex-col border-t-8 border-blue-600 animate-in fade-in zoom-in-95 duration-300">
               
               {/* Header: ติดอยู่บนสุด */}
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
                 <div>
-                  <h2 className="text-2xl font-black uppercase italic tracking-tighter">สร้าง <span className="text-blue-500 not-italic">บิลสั่งซื้อใหม่</span></h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">ระบุรายละเอียดสินค้าที่ต้องการสั่งครับ</p>
+                  <h2 className="text-2xl font-semibold ">สร้าง <span className="text-blue-500 ">บิลสั่งซื้อใหม่</span></h2>
+                  <p className="text-[11px] text-slate-400 font-bold mt-1">ระบุรายละเอียดสินค้าที่ต้องการสั่งครับ</p>
                 </div>
                 <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-rose-600 transition-colors text-xl">x</button>
               </div>
@@ -1093,8 +1056,8 @@ const fetchStatus = async () => {
                 
                 {/* ฝั่งซ้าย: ฟอร์มกรอกข้อมูล (Scrollable) */}
                 <div className="flex-1 p-8 space-y-6 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                  <div className="bg-blue-50/50 p-6 rounded-[30px] border border-blue-100">
-                    <label className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] block mb-2 ml-1">1. ชื่อรอบการสั่งซื้อ</label>
+                  <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+                    <label className="text-[11px] font-semibold text-blue-600 tracking-wide block mb-2 ml-1">1. ชื่อรอบการสั่งซื้อ</label>
                     <input 
                       className="w-full bg-white border-2 border-slate-100 p-4 rounded-2xl font-bold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 ring-blue-500/5 transition-all" 
                       placeholder="เช่น ของใช้ทั่วไป 14/03/69" 
@@ -1103,8 +1066,8 @@ const fetchStatus = async () => {
                     />
                   </div>
 
-                  <div className="bg-slate-50 p-6 rounded-[30px] border border-slate-200">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">2. เพิ่มรายการสินค้า</label>
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                    <label className="text-[11px] font-semibold text-slate-400 tracking-wide block mb-3 ml-1">2. เพิ่มรายการสินค้า</label>
                     <form onSubmit={addItemToTempList} className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <input className="p-4 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all" placeholder="รหัสสินค้า" value={formData.id} onChange={(e) => setFormData({...formData, id: e.target.value})} required />
@@ -1112,17 +1075,17 @@ const fetchStatus = async () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">หน้าร้าน:</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-300">หน้าร้าน:</span>
                           <input type="number" className="w-full p-4 pl-16 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" value={formData.storeQty} onChange={(e) => setFormData({...formData, storeQty: e.target.value})} required />
                         </div>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300">คลังสินค้า:</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-300">คลังสินค้า:</span>
                           <input type="number" className="w-full p-4 pl-16 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" value={formData.warehouseQty} onChange={(e) => setFormData({...formData, warehouseQty: e.target.value})} required />
                         </div>
                       </div>
                       <input className="w-full p-4 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" placeholder="ชื่อซัพพลายเออร์ (ถ้าทราบ)" value={formData.supplier} onChange={(e) => setFormData({...formData, supplier: e.target.value})} />
                       <textarea className="w-full p-4 rounded-2xl border border-slate-100 bg-white shadow-sm font-bold text-sm outline-none" placeholder="หมายเหตุถึงจัดซื้อ..." rows={2} value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
-                      <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-lg">+ เพิ่มเข้าบิล</button>
+                      <button type="submit" className="w-full bg-slate-900 text-white font-semibold py-4 rounded-2xl text-[11px] hover:bg-blue-600 transition-all active:scale-95 shadow-lg">+ เพิ่มเข้าบิล</button>
                     </form>
                   </div>
                 </div>
@@ -1130,25 +1093,25 @@ const fetchStatus = async () => {
                 {/* ฝั่งขวา: รายการที่เลือกแล้ว (Fixed Section) */}
                 <div className="w-full md:w-95 bg-slate-50 p-8 flex flex-col shrink-0">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">รายการในบิล ({items.length})</p>
-                    {items.length > 0 && <button onClick={() => setItems([])} className="text-[9px] font-black text-rose-500 uppercase hover:underline">ล้างทั้งหมด</button>}
+                    <p className="text-[11px] font-semibold text-slate-400 ">รายการในบิล ({items.length})</p>
+                    {items.length > 0 && <button onClick={() => setItems([])} className="text-[11px] font-semibold text-rose-500 hover:underline">ล้างทั้งหมด</button>}
                   </div>
                   
                   {/* รายการสินค้าที่เลือกไว้ ภายในพื้นที่ที่เหลือ */}
                   <div className="flex-1 overflow-y-auto space-y-2 pr-2 mb-6 custom-scrollbar">
                     {items.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[30px] text-slate-300 p-6 text-center">
+                      <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl text-slate-300 p-6 text-center">
                         <span className="text-3xl mb-2">+</span>
-                        <p className="font-black text-[9px] uppercase tracking-widest leading-loose">เพิ่มสินค้าจากด้านซ้าย<br/>เพื่อเริ่มสร้างบิลครับ</p>
+                        <p className="font-semibold text-[11px] leading-loose">เพิ่มสินค้าจากด้านซ้าย<br/>เพื่อเริ่มสร้างบิลครับ</p>
                       </div>
                     ) : (
                       items.map((item, i) => (
                         <div key={i} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                           <div className="overflow-hidden">
-                            <span className="font-black text-xs uppercase italic text-slate-700 block truncate">{item.name}</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">สต็อก: {item.storeQty}/{item.warehouseQty}</span>
+                            <span className="font-semibold text-xs text-slate-700 block truncate">{item.name}</span>
+                            <span className="text-[11px] font-bold text-slate-400 ">สต็อก: {item.storeQty}/{item.warehouseQty}</span>
                           </div>
-                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors flex items-center justify-center text-[10px]">x</button>
+                          <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors flex items-center justify-center text-[11px]">x</button>
                         </div>
                       ))
                     )}
@@ -1158,7 +1121,7 @@ const fetchStatus = async () => {
                   <button 
                     onClick={submitBatch} 
                     disabled={items.length === 0 || !batchName || isSubmitting}
-                    className={`w-full py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl transition-all active:scale-95 ${items.length > 0 && !isSubmitting ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    className={`w-full py-5 rounded-2xl font-semibold  text-[11px] tracking-wide shadow-xl transition-all active:scale-95 ${items.length > 0 && !isSubmitting ? 'bg-blue-600 text-white hover:bg-slate-900 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                   >
                     {isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งบิลเดี๋ยวนี้'}
                   </button>
@@ -1171,41 +1134,41 @@ const fetchStatus = async () => {
       {/* ⚠️ Duplicate Warning Modal */}
       {canManageSorting && duplicateWarning.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-200 p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-10 relative animate-in zoom-in-95 duration-300 border-t-8 border-amber-500">
             <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
+              <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
                 ⚠️
               </div>
-              <h3 className="text-2xl font-black text-slate-900 italic uppercase mb-2">ระวัง!</h3>
+              <h3 className="text-2xl font-semibold text-slate-900 mb-2">ระวัง!</h3>
               <p className="text-amber-600 font-bold text-sm">สินค้านี้มีการสั่งอยู่แล้ว</p>
             </div>
 
-            <div className="bg-amber-50 p-6 rounded-[25px] border-2 border-amber-200 mb-8 space-y-4">
+            <div className="bg-amber-50 p-6 rounded-xl border-2 border-amber-200 mb-8 space-y-4">
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">รหัสสินค้า</p>
-                <p className="text-lg font-black text-slate-900">{duplicateWarning.productId}</p>
+                <p className="text-[11px] font-semibold text-amber-600 ">รหัสสินค้า</p>
+                <p className="text-lg font-semibold text-slate-900">{duplicateWarning.productId}</p>
               </div>
               
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ชื่อสินค้า</p>
+                <p className="text-[11px] font-semibold text-amber-600 ">ชื่อสินค้า</p>
                 <p className="font-bold text-slate-700">{duplicateWarning.productName}</p>
               </div>
               
               <div className="h-px bg-amber-200"></div>
               
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">บิลที่สั่งค้างอยู่</p>
-                <p className="font-bold text-slate-700 italic text-sm wrap-break-word">{duplicateWarning.existingOrder}</p>
+                <p className="text-[11px] font-semibold text-amber-600 ">บิลที่สั่งค้างอยู่</p>
+                <p className="font-bold text-slate-700 text-sm wrap-break-word">{duplicateWarning.existingOrder}</p>
               </div>
             </div>
 
             <p className="text-center text-slate-600 font-bold text-sm mb-8">สินค้านี้ยังไม่ได้รับจากผู้ขาย<br/>คุณต้องการสั่งเพิ่มอีกหรือไม่?</p>
 
             <div className="flex gap-4">
-              <button onClick={() => setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' })} className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95">ยกเลิก</button>
-              <button onClick={() => { if (duplicateWarning.pendingAction) { duplicateWarning.pendingAction(); } }} className="flex-1 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-amber-600 text-white hover:bg-amber-700 transition-all active:scale-95 shadow-lg">ใช่ สั่งเพิ่ม</button>
+              <button onClick={() => setDuplicateWarning({ isOpen: false, productId: '', productName: '', existingOrder: '' })} className="flex-1 py-4 rounded-2xl font-semibold text-[11px] bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95">ยกเลิก</button>
+              <button onClick={() => { if (duplicateWarning.pendingAction) { duplicateWarning.pendingAction(); } }} className="flex-1 py-4 rounded-2xl font-semibold text-[11px] bg-amber-600 text-white hover:bg-amber-700 transition-all active:scale-95 shadow-lg">ใช่ สั่งเพิ่ม</button>
             </div>
           </div>
         </div>

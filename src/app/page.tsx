@@ -1,6 +1,6 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface MenuItem {
@@ -179,212 +179,219 @@ export default function HomeImproved() {
     }
   };
 
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (!showLogin && !showRegister) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setShowLogin(false); setShowRegister(false); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showLogin, showRegister]);
+
+  const closeButton = (onClose: () => void) => (
+    <button
+      onClick={onClose}
+      aria-label="ปิด"
+      className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-[var(--muted)] transition hover:bg-[var(--bg)] hover:text-[var(--ink)] active:scale-90"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
+    </button>
+  );
+
+  const submitClass = (busy: boolean) =>
+    `w-full rounded-xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.98] ${busy ? 'cursor-not-allowed opacity-60' : 'hover:brightness-110'}`;
+
   return (
-    <div className="min-h-screen bg-[var(--bg)] relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-dot-grid opacity-60 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
-
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-5 py-16">
-        <div className="text-center mb-10 max-w-xl">
-          <div className="inline-flex items-center gap-2 mb-5 px-4 py-1.5 rounded-lg bg-[var(--brand-soft)] border border-[var(--line)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--stock-ink)]" />
-            <span className="text-[11px] font-semibold text-[var(--muted)] tracking-[0.18em] uppercase">
-              Supply Bridge System
-            </span>
-          </div>
-          <h1 className="font-display text-4xl sm:text-5xl font-bold text-[var(--ink)] mb-4 leading-[1.1] tracking-tight">
-            สำเพ็ง บุรีรัมย์
-          </h1>
-          <p className="text-[var(--muted)] text-base leading-relaxed">
-            เลือกแผนกของคุณเพื่อเข้าสู่ระบบจัดการสต็อกและสั่งซื้อสินค้า
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl w-full mb-8">
-          {menus.map((menu) => (
-            <button
-              key={menu.href}
-              onClick={() => handleMenuClick(menu)}
-              className="group text-left bg-[var(--surface)] rounded-2xl border border-[var(--line)] overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-panel)] active:scale-[0.98] focus-visible:outline-offset-4"
-            >
-              <div className="h-24 flex items-center justify-center relative" style={{ background: menu.soft }}>
-                <div className="w-14 h-14 rounded-xl bg-white/70 flex items-center justify-center">
-                  <DeptIcon kind={menu.icon} color={menu.ink} />
-                </div>
-              </div>
-
-              <div className="relative h-0 border-t border-dashed border-[var(--line)]">
-                <span className="absolute -left-2 -top-2 w-4 h-4 rounded-full bg-[var(--bg)]" />
-                <span className="absolute -right-2 -top-2 w-4 h-4 rounded-full bg-[var(--bg)]" />
-              </div>
-
-              <div className="p-6">
-                <h2 className="font-display text-lg font-semibold text-[var(--ink)] mb-1.5">{menu.title}</h2>
-                <p className="text-sm text-[var(--muted)] leading-relaxed mb-5 min-h-10">{menu.desc}</p>
-                <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: menu.ink }}>
-                  เข้าสู่ระบบ
-                  <svg className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <p className="text-[11px] text-[var(--muted)] tracking-wide">ระบบจัดการสต็อก เวอร์ชัน 2.0</p>
-        <button
-          onClick={() => {
-            setShowRegister(true);
-            setRegisterMessage('');
-          }}
-          className="mt-5 rounded-xl border border-[var(--line)] bg-white px-5 py-3 text-sm font-bold text-[var(--ink)] shadow-sm transition-colors hover:bg-[var(--brand-soft)]"
-        >
-          สมัครเข้าใช้งาน
-        </button>
+    <div className="relative min-h-screen overflow-hidden bg-[var(--bg)]">
+      {/* เส้นทางส่งของ 3 สี ลากผ่านหลังหน้า */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 flex h-1.5">
+        <span className="flex-1" style={{ background: 'var(--sorting-ink)' }} />
+        <span className="flex-1" style={{ background: 'var(--purchase-ink)' }} />
+        <span className="flex-1" style={{ background: 'var(--stock-ink)' }} />
       </div>
 
-      {showLogin && selectedMenu && (
-        <div className="fixed inset-0 bg-[var(--ink)]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowLogin(false)}>
-          <div className="bg-[var(--surface)] rounded-2xl shadow-2xl w-full max-w-sm p-8 relative border border-[var(--line)]" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setShowLogin(false)}
-              aria-label="ปิด"
-              className="absolute right-5 top-5 text-[var(--muted)] hover:text-[var(--ink)] transition-colors w-9 h-9 flex items-center justify-center rounded-full hover:bg-[var(--bg)]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
-            </button>
-
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: selectedMenu.soft }}>
-                <DeptIcon kind={selectedMenu.icon} color={selectedMenu.ink} />
-              </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1.5" style={{ color: selectedMenu.ink }}>
-                การยืนยันตัวตน
-              </p>
-              <h3 className="font-display text-xl font-semibold text-[var(--ink)]">{selectedMenu.title}</h3>
+      <main className="relative z-10 mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-5 py-14 lg:grid-cols-[1fr_1.15fr] lg:gap-14">
+        {/* ฝั่งซ้าย: ชื่อระบบ + เส้นทางงาน */}
+        <section>
+          <div className="mb-6 flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-950 text-base font-black text-white shadow-sm">SP</div>
+            <div>
+              <p className="font-display text-base font-bold leading-none text-[var(--ink)]">Supply Bridge</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">ระบบจัดซื้อและตรวจรับสินค้า</p>
             </div>
+          </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1.5">
-                <label htmlFor="username" className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">ชื่อผู้ใช้</label>
-                <input
-                  id="username"
-                  type="text"
-                  className="control-field w-full p-3.5 rounded-xl text-sm font-medium placeholder:text-[var(--muted)]/60"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="กรอกชื่อผู้ใช้"
-                  required
-                />
-              </div>
+          <h1 className="font-display text-4xl font-bold leading-[1.25] text-[var(--ink)] sm:text-5xl">
+            สำเพ็ง บุรีรัมย์
+          </h1>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-[var(--muted)]">
+            ของที่ขาดไปถึงมือจัดซื้อ แล้วถึงคลังอย่างครบถ้วน เลือกแผนกของคุณเพื่อเริ่มงาน
+          </p>
 
-              <div className="space-y-1.5">
-                <label htmlFor="password" className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">รหัสผ่าน</label>
-                <input
-                  id="password"
-                  type="password"
-                  className="control-field w-full p-3.5 rounded-xl text-sm font-medium placeholder:text-[var(--muted)]/60"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
+          <ol className="mt-8 hidden max-w-md gap-0 sm:grid" aria-label="ขั้นตอนการทำงาน">
+            {menus.map((menu, i) => (
+              <li key={menu.href} className="relative flex gap-4 pb-6 last:pb-0">
+                {i < menus.length - 1 && (
+                  <span aria-hidden="true" className="absolute left-[19px] top-10 h-[calc(100%-2.5rem)] border-l-2 border-dashed border-[var(--line-strong)]" />
+                )}
+                <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ background: menu.soft, color: menu.ink }}>
+                  {i + 1}
+                </span>
+                <div className="pt-1.5">
+                  <p className="text-sm font-semibold text-[var(--ink)]">{menu.title}</p>
+                  <p className="text-sm text-[var(--muted)]">{menu.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-              {error && <div className="bg-[#FBEAE8] border border-[#F0C9C4] text-[#A4453B] text-sm font-medium p-3.5 rounded-xl text-center">{error}</div>}
-
+        {/* ฝั่งขวา: เลือกแผนก */}
+        <section>
+          <h2 className="mb-4 text-sm font-semibold text-[var(--muted)]">เข้าสู่ระบบในฐานะ</h2>
+          <div className="grid gap-4">
+            {menus.map((menu) => (
               <button
-                type="submit"
-                disabled={loading}
-                className={`w-full py-3.5 rounded-xl font-semibold text-sm tracking-wide transition-all active:scale-[0.98] ${loading ? 'bg-[var(--line)] text-[var(--muted)] cursor-not-allowed' : 'bg-[var(--brand)] text-white hover:opacity-90 shadow-lg shadow-[var(--brand)]/15'}`}
+                key={menu.href}
+                onClick={() => handleMenuClick(menu)}
+                className="group relative flex items-center gap-5 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-left shadow-[var(--shadow-card)] transition duration-300 hover:-translate-y-0.5 hover:border-transparent hover:shadow-xl active:scale-[0.99] sm:p-6"
               >
-                {loading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบ'}
+                <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1.5 transition-all duration-300 group-hover:w-2.5" style={{ background: menu.ink }} />
+                <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl transition-transform duration-300 group-hover:scale-105" style={{ background: menu.soft }}>
+                  <DeptIcon kind={menu.icon} color={menu.ink} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display text-lg font-semibold text-[var(--ink)]">{menu.title}</span>
+                  <span className="mt-1 block text-sm leading-relaxed text-[var(--muted)]">{menu.desc}</span>
+                </span>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-300 group-hover:translate-x-1" style={{ background: menu.soft, color: menu.ink }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </span>
               </button>
+            ))}
+          </div>
 
-              <p className="text-xs text-[var(--muted)] text-center pt-1">หากเข้าสู่ระบบไม่ได้ โปรดติดต่อ IT Support</p>
-            </form>
+          <div className="mt-6 flex flex-col items-start gap-3 rounded-2xl border border-dashed border-[var(--line-strong)] p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่มีบัญชี?</p>
+              <p className="text-sm text-[var(--muted)]">สมัครแล้วใช้งานได้ทันที ไม่ต้องรออนุมัติ</p>
+            </div>
+            <button onClick={() => { setShowRegister(true); setRegisterMessage(''); }} className="secondary-action shrink-0">
+              สมัครเข้าใช้งาน
+            </button>
+          </div>
+        </section>
+      </main>
+
+      {/* หน้าต่างเข้าสู่ระบบ */}
+      {showLogin && selectedMenu && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowLogin(false)}>
+          <div
+            role="dialog" aria-modal="true" aria-label={`เข้าสู่ระบบ ${selectedMenu.title}`}
+            className="pop-in relative w-full max-w-sm overflow-hidden rounded-t-3xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-1.5 w-full" style={{ background: selectedMenu.ink }} />
+            {closeButton(() => setShowLogin(false))}
+            <div className="p-7 sm:p-8">
+              <div className="mb-7 text-center">
+                <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl" style={{ background: selectedMenu.soft }}>
+                  <DeptIcon kind={selectedMenu.icon} color={selectedMenu.ink} />
+                </div>
+                <p className="mb-1 text-xs font-semibold" style={{ color: selectedMenu.ink }}>เข้าสู่ระบบ</p>
+                <h3 className="font-display text-xl font-semibold text-[var(--ink)]">{selectedMenu.title}</h3>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="username" className="block text-xs font-semibold text-[var(--muted)]">ชื่อผู้ใช้</label>
+                  <input
+                    id="username" type="text" autoFocus autoComplete="username" required
+                    className="control-field w-full p-3.5 text-sm"
+                    value={username} onChange={(e) => setUsername(e.target.value)} placeholder="กรอกชื่อผู้ใช้"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="password" className="block text-xs font-semibold text-[var(--muted)]">รหัสผ่าน</label>
+                  <div className="relative">
+                    <input
+                      id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required
+                      className="control-field w-full p-3.5 pr-16 text-sm"
+                      value={password} onChange={(e) => setPassword(e.target.value)} placeholder="รหัสผ่าน"
+                    />
+                    <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--bg)]">
+                      {showPassword ? 'ซ่อน' : 'แสดง'}
+                    </button>
+                  </div>
+                </div>
+
+                {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-center text-sm font-medium text-rose-700">{error}</div>}
+
+                <button type="submit" disabled={loading} className={submitClass(loading)} style={{ background: selectedMenu.ink }}>
+                  {loading ? 'กำลังตรวจสอบ…' : 'เข้าสู่ระบบ'}
+                </button>
+
+                <p className="pt-1 text-center text-xs text-[var(--muted)]">หากเข้าสู่ระบบไม่ได้ โปรดติดต่อ IT Support</p>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
+      {/* หน้าต่างสมัครสมาชิก */}
       {showRegister && (
-        <div className="fixed inset-0 bg-[var(--ink)]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowRegister(false)}>
-          <div className="bg-[var(--surface)] rounded-2xl shadow-2xl w-full max-w-md p-8 relative border border-[var(--line)]" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setShowRegister(false)}
-              aria-label="ปิด"
-              className="absolute right-5 top-5 text-[var(--muted)] hover:text-[var(--ink)] transition-colors w-9 h-9 flex items-center justify-center rounded-full hover:bg-[var(--bg)]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
-            </button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowRegister(false)}>
+          <div
+            role="dialog" aria-modal="true" aria-label="สมัครเข้าใช้งาน"
+            className="pop-in relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-1.5 w-full bg-gradient-to-r from-[var(--sorting-ink)] via-[var(--purchase-ink)] to-[var(--stock-ink)]" />
+            {closeButton(() => setShowRegister(false))}
+            <div className="p-7 sm:p-8">
+              <div className="mb-6 text-center">
+                <h3 className="font-display text-2xl font-semibold text-[var(--ink)]">สมัครเข้าใช้งาน</h3>
+                <p className="mt-2 text-sm text-[var(--muted)]">สมัครแล้วเข้าสู่ระบบใช้งานได้ทันที</p>
+              </div>
 
-            <div className="mb-7 text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Access Request</p>
-              <h3 className="mt-2 font-display text-2xl font-semibold text-[var(--ink)]">สมัครเข้าใช้งาน</h3>
-              <p className="mt-2 text-sm text-[var(--muted)]">สมัครแล้วเข้าสู่ระบบใช้งานได้ทันที</p>
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="reg-name" className="block text-xs font-semibold text-[var(--muted)]">ชื่อที่แสดงในระบบ</label>
+                  <input id="reg-name" autoFocus className="control-field w-full p-3.5 text-sm" value={registerForm.name}
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))} placeholder="เช่น admin stock" required />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label htmlFor="reg-user" className="block text-xs font-semibold text-[var(--muted)]">Username</label>
+                    <input id="reg-user" autoComplete="username" className="control-field w-full p-3.5 text-sm" value={registerForm.username}
+                      onChange={(e) => setRegisterForm((c) => ({ ...c, username: e.target.value }))} placeholder="อย่างน้อย 3 ตัว" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="reg-pass" className="block text-xs font-semibold text-[var(--muted)]">Password</label>
+                    <input id="reg-pass" type="password" autoComplete="new-password" className="control-field w-full p-3.5 text-sm" value={registerForm.password}
+                      onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))} placeholder="อย่างน้อย 8 ตัวอักษร" minLength={8} required />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="reg-dept" className="block text-xs font-semibold text-[var(--muted)]">แผนกที่ใช้งาน</label>
+                  <select id="reg-dept" className="control-field w-full p-3.5 text-sm" value={registerForm.department}
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, department: e.target.value }))}>
+                    {departmentOptions.map((dept) => <option key={dept.value} value={dept.value}>{dept.label}</option>)}
+                  </select>
+                </div>
+
+                {registerMessage && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-center text-sm font-medium text-rose-700">{registerMessage}</div>}
+
+                <button type="submit" disabled={registerLoading} className={submitClass(registerLoading)} style={{ background: 'var(--brand)' }}>
+                  {registerLoading ? 'กำลังสมัคร…' : 'สมัครและเริ่มใช้งาน'}
+                </button>
+              </form>
             </div>
-
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">ชื่อที่แสดงในระบบ</label>
-                <input
-                  className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm((current) => ({ ...current, name: e.target.value }))}
-                  placeholder="เช่น admin stock"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Username</label>
-                  <input
-                    className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
-                    value={registerForm.username}
-                    onChange={(e) => setRegisterForm((current) => ({ ...current, username: e.target.value }))}
-                    placeholder="อย่างน้อย 3 ตัว"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Password</label>
-                  <input
-                    type="password"
-                    className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
-                    value={registerForm.password}
-                    onChange={(e) => setRegisterForm((current) => ({ ...current, password: e.target.value }))}
-                    placeholder="อย่างน้อย 8 ตัวอักษร"
-                    minLength={8}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">แผนกที่ใช้งาน</label>
-                <select
-                  className="control-field w-full p-3.5 rounded-xl text-sm font-medium"
-                  value={registerForm.department}
-                  onChange={(e) => setRegisterForm((current) => ({ ...current, department: e.target.value }))}
-                >
-                  {departmentOptions.map((dept) => (
-                    <option key={dept.value} value={dept.value}>{dept.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {registerMessage && <div className="rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3.5 text-center text-sm font-bold text-[var(--muted)]">{registerMessage}</div>}
-
-              <button
-                type="submit"
-                disabled={registerLoading}
-                className={`w-full py-3.5 rounded-xl font-semibold text-sm tracking-wide transition-all active:scale-[0.98] ${registerLoading ? 'bg-[var(--line)] text-[var(--muted)] cursor-not-allowed' : 'bg-[var(--brand)] text-white hover:opacity-90 shadow-lg shadow-[var(--brand)]/15'}`}
-              >
-                {registerLoading ? 'กำลังสมัคร...' : 'สมัครและเริ่มใช้งาน'}
-              </button>
-            </form>
           </div>
         </div>
       )}
