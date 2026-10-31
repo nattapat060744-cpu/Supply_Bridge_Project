@@ -224,7 +224,7 @@ export default function HomeImproved() {
           </div>
 
           <h1 className="font-display text-4xl font-bold leading-[1.25] text-[var(--ink)] sm:text-5xl">
-            สำเพ็ง บุรีรัมย์
+            ระบบ Supply Bridge
           </h1>
           <p className="mt-4 max-w-md text-base leading-relaxed text-[var(--muted)]">
             ของที่ขาดไปถึงมือจัดซื้อ แล้วถึงคลังอย่างครบถ้วน เลือกแผนกของคุณเพื่อเริ่มงาน

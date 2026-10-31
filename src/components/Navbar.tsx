@@ -245,7 +245,7 @@ export default function Navbar() {
             </div>
             <div className="hidden text-left md:block">
               <p className="font-display text-sm font-bold leading-none text-slate-950">Supply Bridge</p>
-              <p className="mt-1 text-[11px] font-medium text-slate-400">ระบบสำเพ็ง</p>
+              <p className="mt-1 text-[11px] font-medium text-slate-400">ระบบ Supply Bridge</p>
             </div>
           </button>
 
@@ -358,7 +358,7 @@ export default function Navbar() {
               <div className="pop-in absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white" style={{ boxShadow: 'var(--shadow-pop)' }}>
                 <div className="border-b border-slate-100 bg-slate-50 p-5">
                   <p className="font-display text-base font-bold text-slate-950">{user?.name || 'User'}</p>
-                  <p className="mt-1 text-xs text-slate-500">{user?.email || 'ภายในระบบสำเพ็ง'}</p>
+                  <p className="mt-1 text-xs text-slate-500">{user?.email || 'ภายในระบบ Supply Bridge'}</p>
                   <p className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${deptStyle}`}>
                     {deptLabel[user?.department || ''] || user?.department || 'ผู้ใช้'}
                   </p>

@@ -628,7 +628,7 @@ const fetchStatus = async () => {
             <div>
               <p className="page-kicker mb-3">Sorting & Distribution</p>
               <h1 className="page-title font-display">ฝ่ายธุรการคลัง</h1>
-              <p className="page-subtitle mt-2">ติดตามสถานะสินค้าที่ขาด ตั้งแต่แจ้งคำขอจนของเข้าคลัง - สำเพ็ง บุรีรัมย์</p>
+              <p className="page-subtitle mt-2">ติดตามสถานะสินค้าที่ขาด ตั้งแต่แจ้งคำขอจนของเข้าคลัง</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="metric-tile px-5 py-3 text-center">
