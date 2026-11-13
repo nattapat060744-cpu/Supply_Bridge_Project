@@ -15,6 +15,7 @@ const ROUTE_DEPARTMENTS: { prefix: string; allow: string[] }[] = [
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
+  '/api/auth/demo',
   '/api/register',
   '/api/password-requests/public',
 ];

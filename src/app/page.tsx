@@ -149,6 +149,31 @@ export default function HomeImproved() {
     }
   };
 
+  // เดโม: เข้าเป็นแอดมินทันที (ทำงานเฉพาะเมื่อ DEMO_MODE=true ฝั่ง server)
+  const handleDemoLogin = async () => {
+    if (!selectedMenu) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/auth/demo', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('loginDate', data.user.loginDate || new Date().toLocaleDateString());
+        router.push(selectedMenu.href);
+      } else {
+        setError(data.message || 'ไม่สามารถเข้าโหมดเดโมได้');
+      }
+    } catch {
+      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ ลองใหม่อีกครั้งครับ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterLoading(true);
@@ -333,6 +358,12 @@ export default function HomeImproved() {
                 <button type="submit" disabled={loading} className={submitClass(loading)} style={{ background: selectedMenu.ink }}>
                   {loading ? 'กำลังตรวจสอบ…' : 'เข้าสู่ระบบ'}
                 </button>
+
+                {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
+                  <button type="button" disabled={loading} onClick={() => void handleDemoLogin()} className="w-full rounded-xl border border-[var(--line)] p-3 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--bg)] disabled:opacity-60">
+                    เข้าใช้งานแบบเดโม (แอดมิน)
+                  </button>
+                )}
 
                 <p className="pt-1 text-center text-xs text-[var(--muted)]">หากเข้าสู่ระบบไม่ได้ โปรดติดต่อ IT Support</p>
               </form>
